@@ -1,0 +1,1162 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="LiftLog">
+  <meta name="theme-color" content="#818cf8">
+  <link rel="manifest" href="manifest.json">
+  <link rel="apple-touch-icon" href="icon-192.png">
+  <title>LiftLog</title>
+  <script src="https://cdn.jsdelivr.net/npm/sortablejs@1.15.0/Sortable.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    :root {
+      --bg: #0a0a0a; --card: #141414; --elevated: #1c1c1c;
+      --border: #262626; --border-hover: #363636;
+      --primary: #818cf8; --primary-dim: rgba(129,140,248,0.12);
+      --push: #fb923c; --push-dim: rgba(251,146,60,0.12);
+      --pull: #60a5fa; --pull-dim: rgba(96,165,250,0.12);
+      --legs: #4ade80; --legs-dim: rgba(74,222,128,0.12);
+      --arms: #c084fc; --arms-dim: rgba(192,132,252,0.12);
+      --dash: #f472b6; --text: #f1f5f9;
+      --muted: #4b5563; --muted-light: #9ca3af;
+      --danger: #f87171; --success: #4ade80; --orange: #fb923c;
+      --r: 10px; --r-sm: 6px;
+    }
+    body { background: var(--bg); color: var(--text); font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; min-height: 100vh; padding-bottom: env(safe-area-inset-bottom); }
+    .header { padding-top: max(18px, env(safe-area-inset-top)); }
+
+    /* Header */
+    .header { display: flex; align-items: center; justify-content: space-between; padding: 18px 24px; border-bottom: 1px solid var(--border); position: sticky; top: 0; background: var(--bg); z-index: 20; }
+    .logo { font-size: 18px; font-weight: 700; letter-spacing: -0.3px; }
+    .logo span { color: var(--primary); }
+    .header-date { font-size: 12px; color: var(--muted-light); }
+
+    /* Nav */
+    .nav { display: flex; padding: 12px 20px; gap: 6px; overflow-x: auto; scrollbar-width: none; border-bottom: 1px solid var(--border); }
+    .nav::-webkit-scrollbar { display: none; }
+    .nav-btn { display: flex; align-items: center; gap: 7px; padding: 7px 15px; border-radius: var(--r-sm); border: 1px solid var(--border); background: transparent; color: var(--muted-light); font-size: 13px; font-weight: 500; cursor: pointer; white-space: nowrap; transition: all 0.15s; }
+    .nav-btn:hover { border-color: var(--border-hover); color: var(--text); }
+    .nav-dot { width: 7px; height: 7px; border-radius: 50%; background: currentColor; }
+    .nav-btn[data-day="push"].active      { background: var(--push-dim); border-color: var(--push); color: var(--push); }
+    .nav-btn[data-day="pull"].active      { background: var(--pull-dim); border-color: var(--pull); color: var(--pull); }
+    .nav-btn[data-day="legs"].active      { background: var(--legs-dim); border-color: var(--legs); color: var(--legs); }
+    .nav-btn[data-day="arms"].active      { background: var(--arms-dim); border-color: var(--arms); color: var(--arms); }
+    .nav-btn[data-day="dashboard"].active { background: rgba(244,114,182,0.12); border-color: var(--dash); color: var(--dash); }
+
+    /* Main */
+    .main { max-width: 860px; margin: 0 auto; padding: 24px; }
+    .day-header { display: flex; align-items: flex-start; justify-content: space-between; margin-bottom: 20px; gap: 12px; }
+    .day-title { font-size: 26px; font-weight: 700; letter-spacing: -0.5px; line-height: 1.1; }
+    .day-subtitle { font-size: 12px; color: var(--muted-light); margin-top: 5px; }
+
+    /* Buttons */
+    .btn { display: inline-flex; align-items: center; gap: 7px; padding: 9px 18px; border-radius: var(--r-sm); border: none; font-size: 13px; font-weight: 600; cursor: pointer; transition: all 0.15s; }
+    .btn-primary { background: var(--primary); color: #fff; }
+    .btn-primary:hover { opacity: 0.88; }
+    .btn-ghost { background: var(--elevated); color: var(--muted-light); border: 1px solid var(--border); }
+    .btn-ghost:hover { color: var(--text); border-color: var(--border-hover); }
+    .btn-danger-sm { background: transparent; color: var(--danger); border: 1px solid rgba(248,113,113,0.25); border-radius: var(--r-sm); padding: 3px 8px; font-size: 11px; cursor: pointer; transition: all 0.15s; }
+    .btn-danger-sm:hover { background: rgba(248,113,113,0.1); }
+    .icon-btn { width: 28px; height: 28px; display: inline-flex; align-items: center; justify-content: center; border-radius: var(--r-sm); border: 1px solid var(--border); background: transparent; color: var(--muted); cursor: pointer; transition: all 0.15s; }
+    .icon-btn:hover { color: var(--text); border-color: var(--border-hover); background: var(--elevated); }
+    .icon-btn.swap:hover   { color: var(--primary); border-color: var(--primary); background: var(--primary-dim); }
+    .icon-btn.danger:hover { color: var(--danger); border-color: rgba(248,113,113,0.4); background: rgba(248,113,113,0.08); }
+    .icon-btn.is-active    { color: var(--primary); border-color: var(--primary); background: var(--primary-dim); }
+
+    /* Section divider */
+    .section-divider { display: flex; align-items: center; gap: 12px; margin: 28px 0 16px; }
+    .section-divider-line { flex: 1; height: 1px; background: var(--border); }
+    .section-divider-label { font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.7px; color: var(--muted); white-space: nowrap; }
+    .history-count-badge { background: var(--elevated); border: 1px solid var(--border); border-radius: 20px; padding: 2px 10px; font-size: 11px; color: var(--muted-light); }
+
+    /* Exercise list & cards */
+    .exercises-list { display: flex; flex-direction: column; gap: 10px; }
+    .exercise-card { background: var(--card); border: 1px solid var(--border); border-radius: var(--r); overflow: hidden; transition: border-color 0.15s; }
+    .exercise-card:hover { border-color: var(--border-hover); }
+    .card-header { display: flex; align-items: center; gap: 10px; padding: 12px 14px; border-bottom: 1px solid var(--border); }
+    .drag-handle { color: var(--muted); cursor: grab; padding: 2px; display: flex; align-items: center; flex-shrink: 0; }
+    .drag-handle:active { cursor: grabbing; }
+    .card-name { flex: 1; font-size: 14px; font-weight: 600; display: flex; align-items: center; gap: 6px; }
+    .cali-link { display: inline-flex; align-items: center; justify-content: center; width: 18px; height: 18px; border-radius: 4px; background: rgba(129,140,248,0.1); color: var(--primary); text-decoration: none; flex-shrink: 0; transition: background 0.15s; }
+    .cali-link:hover { background: rgba(129,140,248,0.25); }
+    .card-actions { display: flex; gap: 6px; }
+
+    /* Description panel */
+    .card-desc { padding: 11px 14px; background: rgba(129,140,248,0.04); border-bottom: 1px solid var(--border); font-size: 12px; color: var(--muted-light); line-height: 1.6; display: none; }
+    .card-desc.open { display: block; }
+    .desc-src { display: inline-block; margin-top: 6px; font-size: 10px; color: var(--primary); opacity: 0.7; text-decoration: none; }
+    .desc-src:hover { opacity: 1; }
+
+    /* Previous session strip */
+    .card-prev { padding: 7px 14px; background: rgba(255,255,255,0.02); border-bottom: 1px solid var(--border); display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; }
+    .prev-label { font-size: 10px; text-transform: uppercase; letter-spacing: 0.6px; color: var(--muted); flex-shrink: 0; }
+    .prev-chip { background: var(--elevated); border: 1px solid var(--border); border-radius: 4px; padding: 1px 8px; font-size: 11px; font-family: 'SF Mono','Fira Code',ui-monospace,monospace; color: var(--muted-light); }
+
+    /* ── NEW compact set input ── */
+    .card-body { padding: 14px; }
+    .set-control-row {
+      display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
+    }
+    .set-field { display: flex; flex-direction: column; gap: 4px; flex: 1; min-width: 80px; }
+    .set-field-label { font-size: 10px; text-transform: uppercase; letter-spacing: 0.6px; color: var(--muted); }
+    .set-input {
+      background: var(--elevated); border: 1px solid var(--border); border-radius: var(--r-sm);
+      padding: 9px 10px; color: var(--text); font-size: 16px;
+      font-family: 'SF Mono','Fira Code',ui-monospace,monospace;
+      width: 100%; text-align: center; transition: border-color 0.15s;
+    }
+    .set-input:focus { outline: none; border-color: var(--primary); }
+    .set-input::placeholder { color: var(--muted); font-size: 13px; }
+    .set-input::-webkit-inner-spin-button, .set-input::-webkit-outer-spin-button { -webkit-appearance: none; }
+    .sets-counter { display: flex; flex-direction: column; gap: 4px; align-items: center; }
+    .sets-counter-label { font-size: 10px; text-transform: uppercase; letter-spacing: 0.6px; color: var(--muted); }
+    .sets-counter-control { display: flex; align-items: center; gap: 0; border: 1px solid var(--border); border-radius: var(--r-sm); overflow: hidden; background: var(--elevated); }
+    .sets-counter-btn { width: 34px; height: 38px; display: flex; align-items: center; justify-content: center; background: transparent; border: none; color: var(--muted-light); cursor: pointer; font-size: 18px; transition: all 0.15s; }
+    .sets-counter-btn:hover { color: var(--text); background: rgba(255,255,255,0.05); }
+    .sets-counter-val { min-width: 32px; text-align: center; font-size: 16px; font-weight: 600; font-family: 'SF Mono','Fira Code',ui-monospace,monospace; color: var(--text); padding: 0 4px; line-height: 38px; border-left: 1px solid var(--border); border-right: 1px solid var(--border); }
+
+    .workout-actions { display: flex; gap: 8px; margin-top: 20px; }
+
+    /* Session history */
+    .session-item { background: var(--card); border: 1px solid var(--border); border-radius: var(--r); overflow: hidden; margin-bottom: 6px; transition: border-color 0.15s; }
+    .session-item:hover { border-color: var(--border-hover); }
+    .session-item-header { display: flex; align-items: center; gap: 12px; padding: 11px 14px; cursor: pointer; user-select: none; }
+    .session-item-header:hover { background: rgba(255,255,255,0.02); }
+    .session-date-label { font-size: 13px; font-weight: 600; flex: 1; }
+    .session-meta-pills { display: flex; gap: 6px; flex-wrap: wrap; }
+    .session-meta-pill { font-size: 11px; color: var(--muted-light); background: var(--elevated); border: 1px solid var(--border); border-radius: 4px; padding: 1px 8px; font-family: 'SF Mono','Fira Code',ui-monospace,monospace; }
+    .session-chevron { color: var(--muted); transition: transform 0.2s; flex-shrink: 0; }
+    .session-item.open .session-chevron { transform: rotate(180deg); }
+    .session-body { display: none; border-top: 1px solid var(--border); }
+    .session-item.open .session-body { display: block; }
+    .session-ex-row { padding: 10px 14px; border-bottom: 1px solid var(--border); }
+    .session-ex-row:last-child { border-bottom: none; }
+    .session-ex-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 5px; }
+    .session-ex-name { font-size: 12px; font-weight: 600; }
+    .session-ex-stats { font-size: 11px; color: var(--muted-light); font-family: 'SF Mono','Fira Code',ui-monospace,monospace; }
+    .pr-tag { display: inline-block; padding: 1px 6px; border-radius: 4px; background: rgba(251,146,60,0.15); color: var(--orange); font-size: 10px; font-weight: 700; margin-left: 4px; }
+    .session-footer { display: flex; align-items: center; justify-content: space-between; padding: 8px 14px; border-top: 1px solid var(--border); background: rgba(255,255,255,0.01); }
+    .session-date-edit { display: flex; align-items: center; gap: 6px; }
+    .date-input-inline { background: var(--elevated); border: 1px solid var(--border); border-radius: var(--r-sm); padding: 4px 8px; color: var(--text); font-size: 12px; cursor: pointer; }
+    .date-input-inline:focus { outline: none; border-color: var(--primary); }
+    .btn-save-date { background: var(--primary-dim); color: var(--primary); border: 1px solid var(--primary); border-radius: var(--r-sm); padding: 3px 9px; font-size: 11px; font-weight: 600; cursor: pointer; transition: all 0.15s; }
+    .btn-save-date:hover { background: var(--primary); color: #fff; }
+    .history-show-more { display: block; text-align: center; padding: 10px; font-size: 12px; color: var(--primary); cursor: pointer; background: transparent; border: 1px dashed var(--border); border-radius: var(--r-sm); width: 100%; transition: all 0.15s; }
+    .history-show-more:hover { background: var(--primary-dim); border-color: var(--primary); }
+
+    /* Empty state */
+    .empty-state { text-align: center; padding: 56px 24px; color: var(--muted); }
+    .empty-icon { font-size: 36px; margin-bottom: 10px; }
+    .empty-text { font-size: 14px; color: var(--muted-light); }
+
+    /* Modal */
+    .modal-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.75); z-index: 100; display: flex; align-items: flex-end; justify-content: center; opacity: 0; pointer-events: none; transition: opacity 0.2s; }
+    .modal-overlay.open { opacity: 1; pointer-events: auto; }
+    .modal { background: var(--card); border: 1px solid var(--border); border-radius: var(--r) var(--r) 0 0; width: 100%; max-width: 620px; max-height: 82vh; display: flex; flex-direction: column; transform: translateY(100%); transition: transform 0.28s cubic-bezier(0.16,1,0.3,1); }
+    .modal-overlay.open .modal { transform: translateY(0); }
+    .modal-header { display: flex; align-items: center; justify-content: space-between; padding: 15px 18px; border-bottom: 1px solid var(--border); flex-shrink: 0; }
+    .modal-title { font-size: 15px; font-weight: 600; }
+    .close-btn { width: 30px; height: 30px; display: flex; align-items: center; justify-content: center; border-radius: var(--r-sm); border: none; background: var(--elevated); color: var(--muted-light); cursor: pointer; font-size: 18px; line-height: 1; }
+    .close-btn:hover { color: var(--text); }
+    .bank-search-row { padding: 10px 18px 0; flex-shrink: 0; }
+    .bank-search { width: 100%; background: var(--elevated); border: 1px solid var(--border); border-radius: var(--r-sm); padding: 8px 12px; color: var(--text); font-size: 13px; outline: none; transition: border-color 0.15s; }
+    .bank-search:focus { border-color: var(--primary); }
+    .bank-search::placeholder { color: var(--muted); }
+    .bank-filter-row { display: flex; gap: 6px; padding: 10px 18px; border-bottom: 1px solid var(--border); overflow-x: auto; scrollbar-width: none; flex-shrink: 0; }
+    .bank-filter-row::-webkit-scrollbar { display: none; }
+    .filter-pill { padding: 4px 12px; border-radius: 20px; border: 1px solid var(--border); background: transparent; color: var(--muted-light); font-size: 12px; cursor: pointer; white-space: nowrap; transition: all 0.15s; }
+    .filter-pill.active { background: var(--primary-dim); border-color: var(--primary); color: var(--primary); }
+    .bank-grid { padding: 14px 18px; display: grid; grid-template-columns: repeat(auto-fill,minmax(160px,1fr)); gap: 6px; overflow-y: auto; flex: 1; }
+    .bank-item { padding: 9px 12px; border-radius: var(--r-sm); border: 1px solid var(--border); background: var(--elevated); cursor: pointer; transition: all 0.15s; font-size: 12px; font-weight: 500; position: relative; }
+    .bank-item:hover { border-color: var(--primary); color: var(--primary); background: var(--primary-dim); }
+    .bank-item.selected { border-color: var(--primary); color: var(--primary); background: var(--primary-dim); }
+    .bank-item.in-day { border-color: var(--border-hover); color: var(--muted-light); }
+    .bank-item-name { padding-right: 20px; }
+    .bank-mg { font-size: 10px; color: var(--muted); margin-top: 2px; text-transform: capitalize; }
+    .bank-ext-link { position: absolute; top: 8px; right: 8px; width: 16px; height: 16px; display: flex; align-items: center; justify-content: center; border-radius: 3px; background: rgba(129,140,248,0.15); color: var(--primary); text-decoration: none; opacity: 0.7; transition: opacity 0.15s; }
+    .bank-ext-link:hover { opacity: 1; background: rgba(129,140,248,0.3); }
+    .bank-empty { grid-column: 1/-1; text-align: center; padding: 32px; color: var(--muted-light); font-size: 13px; }
+    .bank-add-row { display: flex; gap: 7px; padding: 12px 18px; border-top: 1px solid var(--border); flex-shrink: 0; }
+    .bank-input { flex: 1; background: var(--elevated); border: 1px solid var(--border); border-radius: var(--r-sm); padding: 7px 11px; color: var(--text); font-size: 13px; }
+    .bank-input:focus { outline: none; border-color: var(--primary); }
+    .bank-select { background: var(--elevated); border: 1px solid var(--border); border-radius: var(--r-sm); padding: 7px 11px; color: var(--muted-light); font-size: 13px; cursor: pointer; }
+    .bank-select:focus { outline: none; border-color: var(--primary); }
+
+    /* Dashboard */
+    .stats-grid { display: grid; grid-template-columns: repeat(3,1fr); gap: 10px; margin-bottom: 20px; }
+    .stat-card { background: var(--card); border: 1px solid var(--border); border-radius: var(--r); padding: 16px; }
+    .stat-label { font-size: 11px; text-transform: uppercase; letter-spacing: 0.5px; color: var(--muted); margin-bottom: 4px; }
+    .stat-value { font-size: 28px; font-weight: 700; letter-spacing: -0.5px; }
+    .stat-sub { font-size: 11px; color: var(--muted-light); margin-top: 3px; }
+    .chart-card { background: var(--card); border: 1px solid var(--border); border-radius: var(--r); padding: 18px; margin-bottom: 16px; }
+    .chart-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 14px; flex-wrap: wrap; gap: 8px; }
+    .chart-title { font-size: 14px; font-weight: 600; }
+    .chart-select { background: var(--elevated); border: 1px solid var(--border); border-radius: var(--r-sm); padding: 5px 10px; color: var(--text); font-size: 12px; cursor: pointer; }
+
+    /* PR table */
+    .pr-table-wrap { overflow-x: auto; }
+    table.pr-table { width: 100%; border-collapse: collapse; font-size: 12px; }
+    .pr-table th { text-align: left; padding: 7px 10px; color: var(--muted); font-size: 10px; text-transform: uppercase; letter-spacing: 0.6px; border-bottom: 1px solid var(--border); }
+    .pr-table td { padding: 9px 10px; border-bottom: 1px solid var(--border); color: var(--muted-light); vertical-align: middle; }
+    .pr-table tr:last-child td { border-bottom: none; }
+    .pr-table tr:hover td { background: rgba(255,255,255,0.02); }
+    .pr-table td:first-child { color: var(--text); font-weight: 500; }
+    .pr-table td.mono { font-family: 'SF Mono','Fira Code',ui-monospace,monospace; }
+    .pr-gain-pos { color: var(--success); }
+    .pr-gain-neu { color: var(--muted-light); }
+
+    /* History table */
+    .hist-table-wrap { margin-top: 14px; overflow-x: auto; }
+    table.hist-table { width: 100%; border-collapse: collapse; font-size: 12px; }
+    .hist-table th { text-align: left; padding: 7px 10px; color: var(--muted); font-size: 10px; text-transform: uppercase; letter-spacing: 0.6px; border-bottom: 1px solid var(--border); white-space: nowrap; }
+    .hist-table td { padding: 8px 10px; border-bottom: 1px solid var(--border); color: var(--muted-light); }
+    .hist-table tr:last-child td { border-bottom: none; }
+    .hist-table tr:hover td { background: rgba(255,255,255,0.02); }
+    .hist-table td:first-child { color: var(--text); font-weight: 500; white-space: nowrap; }
+    .hist-table td.mono { font-family: 'SF Mono','Fira Code',ui-monospace,monospace; }
+
+    /* Toast */
+    .toast { position: fixed; bottom: 20px; right: 20px; background: var(--elevated); border: 1px solid var(--border); border-radius: var(--r-sm); padding: 10px 15px; font-size: 13px; z-index: 300; transform: translateY(12px); opacity: 0; transition: all 0.25s; pointer-events: none; }
+    .toast.show { transform: translateY(0); opacity: 1; }
+    .toast.success { border-color: rgba(74,222,128,0.4); color: var(--success); }
+    .toast.error   { border-color: rgba(248,113,113,0.4); color: var(--danger); }
+    .sortable-ghost { opacity: 0.25; }
+
+    @media (max-width: 600px) {
+      .main { padding: 14px; }
+      .stats-grid { grid-template-columns: 1fr 1fr; }
+      .day-title { font-size: 20px; }
+    }
+    ::-webkit-scrollbar { width: 5px; height: 5px; }
+    ::-webkit-scrollbar-track { background: transparent; }
+    ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+  </style>
+</head>
+<body>
+
+<div class="header">
+  <div class="logo">Lift<span>Log</span></div>
+  <div class="header-date" id="header-date"></div>
+</div>
+<div class="nav">
+  <button class="nav-btn active" data-day="push"      onclick="switchDay('push')"><span class="nav-dot"></span>Push</button>
+  <button class="nav-btn"        data-day="pull"      onclick="switchDay('pull')"><span class="nav-dot"></span>Pull</button>
+  <button class="nav-btn"        data-day="legs"      onclick="switchDay('legs')"><span class="nav-dot"></span>Legs</button>
+  <button class="nav-btn"        data-day="arms"      onclick="switchDay('arms')"><span class="nav-dot"></span>Arms</button>
+  <button class="nav-btn"        data-day="dashboard" onclick="switchDay('dashboard')"><span class="nav-dot"></span>Dashboard</button>
+</div>
+<div class="main" id="main"></div>
+
+<!-- Exercise Bank Modal -->
+<div class="modal-overlay" id="bank-modal" onclick="handleModalBackdrop(event)">
+  <div class="modal">
+    <div class="modal-header">
+      <div class="modal-title" id="modal-title">Exercise Bank</div>
+      <button class="close-btn" onclick="closeBankModal()">×</button>
+    </div>
+    <div class="bank-search-row">
+      <input class="bank-search" id="bank-search" type="text" placeholder="Search exercises…" oninput="renderBankGrid()">
+    </div>
+    <div class="bank-filter-row" id="bank-filters"></div>
+    <div class="bank-grid" id="bank-grid"></div>
+    <div class="bank-add-row">
+      <input class="bank-input" id="new-ex-name" type="text" placeholder="Custom exercise name…" onkeydown="if(event.key==='Enter') addCustomExercise()">
+      <select class="bank-select" id="new-ex-mg">
+        <option value="chest">Chest</option>
+        <option value="back">Back</option>
+        <option value="shoulders">Shoulders</option>
+        <option value="biceps">Biceps</option>
+        <option value="triceps">Triceps</option>
+        <option value="legs">Legs</option>
+        <option value="glutes">Glutes</option>
+        <option value="core">Core</option>
+        <option value="full body">Full Body</option>
+      </select>
+      <button class="btn btn-primary" style="padding:7px 13px;white-space:nowrap" onclick="addCustomExercise()">+ Add</button>
+    </div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+// ═══════════════════════════════════════════════════════
+// EXERCISE DATABASE
+// ═══════════════════════════════════════════════════════
+const C = s => `https://calistree.app/datasheet/${s}?cat=e`;
+
+const DEFAULT_BANK = {
+  // Chest
+  bench_press:            { id:'bench_press',           name:'Bench Press',               muscleGroup:'chest',     caliUrl:C('bench-press'),           desc:'Lie on flat bench, grip barbell slightly wider than shoulders. Lower to mid-chest, press to full extension. The foundational chest movement.' },
+  incline_db_press:       { id:'incline_db_press',      name:'Incline DB Press',           muscleGroup:'chest',     caliUrl:C('incline-dumbbell-press'), desc:'Set bench to 30–45°. Press dumbbells from shoulder height to lockout. Greater range of motion than barbell — targets the upper chest.' },
+  decline_bench:          { id:'decline_bench',         name:'Decline Bench Press',        muscleGroup:'chest',     caliUrl:C('decline-bench-press'),    desc:'Bench angled ~15–30° downward. Shifts emphasis to the lower chest. Usually allows heavier loads than flat or incline.' },
+  cable_fly:              { id:'cable_fly',             name:'Cable Chest Fly',            muscleGroup:'chest',     caliUrl:C('cable-fly'),              desc:'Cables at mid-height. Bring handles together in a wide arc with a slight elbow bend. Constant cable tension throughout the entire ROM.' },
+  low_to_high_fly:        { id:'low_to_high_fly',       name:'Low-to-High Cable Fly',      muscleGroup:'chest',     caliUrl:C('low-cable-fly'),          desc:'Cables set at the lowest position. Sweep handles upward and inward toward chin height in a wide arc. Targets the upper chest (clavicular head) with constant tension.' },
+  db_fly:                 { id:'db_fly',                name:'Dumbbell Fly',               muscleGroup:'chest',     caliUrl:C('dumbbell-fly'),           desc:'Lie on bench. Lower dumbbells in a wide arc with a slight elbow bend to stretch the chest, then squeeze back up. Isolates the pec.' },
+  push_up:                { id:'push_up',               name:'Push-Up',                    muscleGroup:'chest',     caliUrl:C('push-up'),                desc:'Hands shoulder-width, lower chest to floor, push to lockout. The baseline bodyweight chest press — scalable to any level.' },
+  close_grip_bench:       { id:'close_grip_bench',      name:'Close Grip Bench Press',     muscleGroup:'chest',     caliUrl:C('close-grip-bench-press'), desc:'Narrow grip (shoulder-width or less). Reduces chest involvement, shifts primary load to triceps. Strong compound movement for arms and chest.' },
+  pec_deck:               { id:'pec_deck',              name:'Pec Deck Machine',           muscleGroup:'chest',     caliUrl:C('pec-deck'),               desc:'Sit upright in machine, bring arms together. Pure pectoral isolation with a fixed path and constant tension. Good finisher.' },
+  // Back
+  deadlift:               { id:'deadlift',              name:'Deadlift',                   muscleGroup:'back',      caliUrl:C('deadlift'),               desc:'Bar over mid-foot, hinge and drive hips to stand. Builds the entire posterior chain — lats, traps, erectors, hamstrings, glutes.' },
+  barbell_row:            { id:'barbell_row',           name:'Barbell Row',                muscleGroup:'back',      caliUrl:C('barbell-row'),            desc:'Hinge at hips to ~45°, pull bar to lower ribcage keeping back flat. Major lat and upper-back thickness builder.' },
+  lat_pulldown:           { id:'lat_pulldown',          name:'Lat Pulldown',               muscleGroup:'back',      caliUrl:C('lat-pulldown'),           desc:'Seated cable pull. Drive elbows down and back to pull bar to upper chest. Wide grip primarily targets the lats for back width.' },
+  seated_row:             { id:'seated_row',            name:'Seated Cable Row',           muscleGroup:'back',      caliUrl:C('seated-cable-row'),       desc:'Pull handle to navel, retract shoulder blades fully. Develops mid-back thickness through full scapular range.' },
+  tbar_row:               { id:'tbar_row',              name:'T-Bar Row',                  muscleGroup:'back',      caliUrl:C('t-bar-row'),              desc:'Load one end of a barbell, straddle it, pull toward chest. Close grip hits lower lats; wider grip hits mid-back and rhomboids.' },
+  pull_up:                { id:'pull_up',               name:'Pull-Up / Chin-Up',          muscleGroup:'back',      caliUrl:C('pull-up'),                desc:'Dead hang, pull chin above bar. Overhand (pull-up) emphasizes lats. Underhand (chin-up) adds more bicep involvement.' },
+  weighted_pull_up:       { id:'weighted_pull_up',      name:'Weighted Pull-Up',           muscleGroup:'back',      caliUrl:C('pull-up'),                desc:'Standard pull-up with added load via a weight belt. Pull chin above bar from a dead hang. Add weight progressively as bodyweight reps become easy.' },
+  machine_single_arm_row: { id:'machine_single_arm_row',name:'Machine Single-Arm Row',     muscleGroup:'back',                                           desc:'Chest-supported machine row performed one arm at a time. Pull the handle to your hip with full elbow retraction. Eliminates lower-back fatigue and isolates each side independently.' },
+  cable_lat_swing:        { id:'cable_lat_swing',       name:'Cable Lat Swing',            muscleGroup:'back',                                           desc:'Stand facing cable tower, single handle at mid-to-high pulley. Keeping arm straight, sweep it down and back in an arc. Isolates the lat through a long range with constant tension.' },
+  single_arm_cable_pd:    { id:'single_arm_cable_pd',   name:'Single-Arm Cable Pulldown',  muscleGroup:'back',      caliUrl:C('single-arm-lat-pulldown'), desc:'High pulley with single handle. Pull down to your hip on one side, keeping torso stable. Unilateral lat isolation for addressing strength imbalances.' },
+  db_row:                 { id:'db_row',                name:'Single-Arm DB Row',          muscleGroup:'back',      caliUrl:C('single-arm-dumbbell-row'), desc:'One hand on bench, pull dumbbell to hip, keeping elbow close. Full unilateral lat and mid-back work without lower-back load.' },
+  straight_arm_pd:        { id:'straight_arm_pd',       name:'Straight-Arm Pulldown',      muscleGroup:'back',      caliUrl:C('straight-arm-pulldown'), desc:'High pulley, arms stay straight as you push bar to thighs. Isolates the lats with zero bicep involvement.' },
+  back_extension:         { id:'back_extension',        name:'Back Extension',             muscleGroup:'back',      caliUrl:C('back-extension'),         desc:'Hyperextension bench. Lower torso, raise back to parallel. Strengthens erectors, glutes, and hamstrings. Hold a plate or dumbbell to add load.' },
+  rack_pull:              { id:'rack_pull',             name:'Rack Pull',                  muscleGroup:'back',      caliUrl:C('rack-pull'),              desc:'Deadlift starting from knee height. Shorter range allows heavier loads — emphasizes upper back, traps, and lockout strength.' },
+  // Shoulders
+  overhead_press:         { id:'overhead_press',        name:'Overhead Press',             muscleGroup:'shoulders', caliUrl:C('overhead-press'),         desc:'Press barbell overhead from front rack. Seated or standing. Primary shoulder builder — hits all three deltoid heads plus triceps and core.' },
+  db_shoulder_press:      { id:'db_shoulder_press',     name:'Dumbbell Shoulder Press',    muscleGroup:'shoulders', caliUrl:C('dumbbell-shoulder-press'), desc:'Seated or standing dumbbell press overhead. Greater range than barbell, each arm works independently. Targets all three delt heads.' },
+  lateral_raise:          { id:'lateral_raise',         name:'Lateral Raise',              muscleGroup:'shoulders', caliUrl:C('lateral-raise'),          desc:'Arms at sides, raise dumbbells to shoulder height with a slight elbow bend. Isolates the medial delt for shoulder width.' },
+  front_raise:            { id:'front_raise',           name:'Front Raise',                muscleGroup:'shoulders', caliUrl:C('front-raise'),            desc:'Arms in front, raise to shoulder height with palms down. Targets the anterior deltoid. Control the negative.' },
+  face_pull:              { id:'face_pull',             name:'Face Pull',                  muscleGroup:'shoulders', caliUrl:C('face-pull'),              desc:'High cable, rope attachment. Pull to face level with elbows flared high. Trains rear delts and external rotation — essential for shoulder health.' },
+  rear_delt_fly:          { id:'rear_delt_fly',         name:'Rear Delt Fly',              muscleGroup:'shoulders', caliUrl:C('rear-delt-fly'),          desc:'Hinge forward with dumbbells or use reverse pec-deck. Arms sweep back like wings. Isolates the posterior deltoid. Keep a slight elbow bend.' },
+  arnold_press:           { id:'arnold_press',          name:'Arnold Press',               muscleGroup:'shoulders', caliUrl:C('arnold-press'),           desc:'Start with palms facing you at chin height, rotate outward as you press overhead. Hits all three delt heads through the rotation.' },
+  cable_lateral:          { id:'cable_lateral',         name:'Cable Lateral Raise',        muscleGroup:'shoulders', caliUrl:C('cable-lateral-raise'),    desc:'Low cable pulley, single arm. Raise arm to shoulder height. Provides constant tension throughout full ROM — the cable stays loaded at the bottom, unlike dumbbells.' },
+  upright_row:            { id:'upright_row',           name:'Upright Row',                muscleGroup:'shoulders', caliUrl:C('upright-row'),            desc:'Pull barbell or cable straight up to chin level, elbows flared. Targets lateral delts and upper traps. Keep moderate weight.' },
+  shrug:                  { id:'shrug',                 name:'Barbell Shrug',              muscleGroup:'shoulders', caliUrl:C('shrug'),                  desc:'Elevate shoulders straight up toward ears under load. Hold briefly at top. Isolates the upper trapezius.' },
+  // Biceps
+  bicep_curl:             { id:'bicep_curl',            name:'Bicep Curl',                 muscleGroup:'biceps',    caliUrl:C('bicep-curl'),             desc:'Standing curl with dumbbells or barbell. Elbows pinned, curl weight to shoulder height. The fundamental bicep movement.' },
+  hammer_curl:            { id:'hammer_curl',           name:'Hammer Curl',                muscleGroup:'biceps',    caliUrl:C('hammer-curl'),            desc:'Neutral (hammer) grip dumbbell curl. Targets brachialis and brachioradialis alongside bicep. Builds arm thickness and forearm strength.' },
+  ez_bar_curl:            { id:'ez_bar_curl',           name:'EZ Bar Curl',                muscleGroup:'biceps',    caliUrl:C('ez-bar-curl'),            desc:'Angled bar reduces wrist and elbow strain. Targets biceps and brachialis. Good for higher-volume work with less joint stress.' },
+  preacher_curl:          { id:'preacher_curl',         name:'Preacher Curl',              muscleGroup:'biceps',    caliUrl:C('preacher-curl'),          desc:'Arm braced on an angled pad. Eliminates momentum, locking the upper arm. Isolates the bicep at the lengthened position for a deep stretch.' },
+  concentration_curl:     { id:'concentration_curl',   name:'Concentration Curl',         muscleGroup:'biceps',    caliUrl:C('concentration-curl'),     desc:'Seated, elbow braced on inner thigh. Full squeeze at top. Maximum isolation and peak contraction for the bicep.' },
+  incline_db_curl:        { id:'incline_db_curl',       name:'Incline DB Curl',            muscleGroup:'biceps',    caliUrl:C('incline-dumbbell-curl'),  desc:'Reclined on incline bench (~45–60°), arms hang behind body. Stretches the long head of the bicep for a deeper contraction and peak development.' },
+  cable_curl:             { id:'cable_curl',            name:'Cable Curl',                 muscleGroup:'biceps',    caliUrl:C('cable-curl'),             desc:'Low pulley cable curl. Constant tension through the full ROM — the cable stays loaded at the bottom, unlike free weights.' },
+  reverse_curl:           { id:'reverse_curl',         name:'Reverse Curl',               muscleGroup:'biceps',    caliUrl:C('reverse-curl'),           desc:'Overhand (pronated) grip curl. Emphasizes brachialis and brachioradialis over the bicep. Also develops forearm strength.' },
+  // Triceps
+  tricep_pushdown:        { id:'tricep_pushdown',       name:'Tricep Pushdown',            muscleGroup:'triceps',   caliUrl:C('tricep-pushdown'),        desc:'High cable, push bar down to full extension. Elbows pinned at sides. Primarily hits the lateral head of the tricep.' },
+  skull_crushers:         { id:'skull_crushers',        name:'Skull Crushers',             muscleGroup:'triceps',   caliUrl:C('skull-crusher'),          desc:'Lie on a bench, lower EZ bar or dumbbells toward the forehead, press to full extension. Emphasizes the long head of the tricep through a full stretch.' },
+  overhead_tri:           { id:'overhead_tri',          name:'Overhead Tricep Extension',  muscleGroup:'triceps',   caliUrl:C('overhead-tricep-extension'), desc:'Cable or dumbbell overhead, arms fully extended. Fully stretches the long head of the tricep. Can be seated or standing, single or double-arm.' },
+  dips:                   { id:'dips',                  name:'Dips',                       muscleGroup:'triceps',   caliUrl:C('dip'),                    desc:'Lower between parallel bars until elbows reach ~90°, press back up. Upright torso for tricep emphasis; lean forward for chest. Add weight with a belt.' },
+  bench_dip:              { id:'bench_dip',             name:'Bench Dip',                  muscleGroup:'triceps',   caliUrl:C('bench-dip'),              desc:'Hands on bench, lower hips toward floor then press back up. Tricep isolation. Add weight plates on lap to progress.' },
+  diamond_pushup:         { id:'diamond_pushup',        name:'Diamond Push-Up',            muscleGroup:'triceps',   caliUrl:C('diamond-pushup'),         desc:'Hands close together forming a diamond under chest. Heavy tricep emphasis compared to standard push-up.' },
+  rope_pushdown:          { id:'rope_pushdown',         name:'Rope Pushdown',              muscleGroup:'triceps',                                        desc:'Same as tricep pushdown but with a rope. Flare hands at the bottom for extra contraction. Hits all three tricep heads with a natural wrist path.' },
+  // Legs
+  back_squat:             { id:'back_squat',            name:'Back Squat',                 muscleGroup:'legs',      caliUrl:C('squat'),                  desc:'Barbell on upper traps, squat to parallel or below. The king of leg exercises — builds quads, glutes, hamstrings, and core simultaneously.' },
+  front_squat:            { id:'front_squat',           name:'Front Squat',                muscleGroup:'legs',      caliUrl:C('front-squat'),            desc:'Bar on front of shoulders. More upright torso than back squat — greater quad and upper-back emphasis. Demands ankle and thoracic mobility.' },
+  leg_press:              { id:'leg_press',             name:'Leg Press',                  muscleGroup:'legs',      caliUrl:C('leg-press'),              desc:'Seated machine press with feet on a platform. Foot placement adjusts emphasis: high and wide = glutes/hamstrings; low and narrow = quads.' },
+  rdl:                    { id:'rdl',                   name:'Romanian Deadlift',          muscleGroup:'legs',      caliUrl:C('romanian-deadlift'),      desc:'Hip-hinge with a slight knee bend. Lower bar along your legs until you feel a hamstring stretch, then drive hips forward. Primary hamstring and glute builder.' },
+  bulgarian_split:        { id:'bulgarian_split',       name:'Bulgarian Split Squat',      muscleGroup:'legs',      caliUrl:C('bulgarian-split-squat'),  desc:'Rear foot elevated, front leg does the work. Lower until front thigh is parallel, drive through heel. Powerful unilateral quad and glute builder.' },
+  leg_extension:          { id:'leg_extension',         name:'Leg Extension',              muscleGroup:'legs',      caliUrl:C('leg-extension'),          desc:'Seated machine. Extend from ~90° to full lockout, squeeze quads at top. Pure quad isolation — useful after compound movements.' },
+  leg_curl:               { id:'leg_curl',              name:'Leg Curl',                   muscleGroup:'legs',      caliUrl:C('leg-curl'),               desc:'Lying or seated machine. Curl against resistance. Pure hamstring isolation. Seated variant increases the stretch on the bicep femoris.' },
+  calf_raise:             { id:'calf_raise',            name:'Calf Raise',                 muscleGroup:'legs',      caliUrl:C('calf-raise'),             desc:'Rise onto toes against load. Standing targets gastrocnemius; seated targets soleus. Full stretch at bottom, full squeeze at top.' },
+  hack_squat:             { id:'hack_squat',            name:'Hack Squat',                 muscleGroup:'legs',      caliUrl:C('hack-squat'),             desc:'Angled sled machine. Back supported, strong quad emphasis with a controlled movement path.' },
+  lunge:                  { id:'lunge',                 name:'Lunge',                      muscleGroup:'legs',      caliUrl:C('lunge'),                  desc:'Step forward and lower rear knee toward floor. Unilateral quad and glute work. Can be forward, reverse, or walking.' },
+  hip_abductor:           { id:'hip_abductor',          name:'Hip Abductor Machine',       muscleGroup:'legs',                                           desc:'Seated machine, push knees/pads outward against resistance. Targets the gluteus medius and hip abductors — critical for knee stability and glute shape.' },
+  // Glutes
+  hip_thrust:             { id:'hip_thrust',            name:'Hip Thrust',                 muscleGroup:'glutes',    caliUrl:C('hip-thrust'),             desc:'Upper back on bench, barbell across hips. Drive to full extension squeezing glutes hard at top. The most effective direct glute exercise for hypertrophy.' },
+  glute_bridge:           { id:'glute_bridge',          name:'Glute Bridge',               muscleGroup:'glutes',    caliUrl:C('glute-bridge'),           desc:'On back, feet flat on floor. Drive hips up to full extension. Bodyweight or loaded — great glute activation with less upper-back involvement than hip thrust.' },
+  sumo_deadlift:          { id:'sumo_deadlift',         name:'Sumo Deadlift',              muscleGroup:'glutes',    caliUrl:C('sumo-deadlift'),          desc:'Wide stance, toes out, hands inside legs. Greater glute and inner thigh emphasis than conventional. Shorter range of motion.' },
+  good_morning:           { id:'good_morning',          name:'Good Morning',               muscleGroup:'glutes',    caliUrl:C('good-morning'),           desc:'Barbell on back, hinge at hips with slight knee bend. Lower torso toward parallel. Strengthens hamstrings, glutes, and erector spinae.' },
+  // Core
+  plank:                  { id:'plank',                 name:'Plank',                      muscleGroup:'core',      caliUrl:C('plank'),                  desc:'Forearms and toes, body in a rigid straight line. Anti-extension core stability movement. Avoid hips sagging or rising.' },
+  cable_crunch:           { id:'cable_crunch',          name:'Cable Ab Crunch',            muscleGroup:'core',      caliUrl:C('cable-crunch'),           desc:'Kneel at cable with rope behind head. Crunch down, rounding the spine toward knees. Weighted ab flexion — allows progressive overload unlike sit-ups.' },
+  ab_rollout:             { id:'ab_rollout',            name:'Ab Rollout',                 muscleGroup:'core',      caliUrl:C('knees-ab-rollout'),       desc:'Ab wheel from knees or toes. Roll forward to full extension, pull back using abs. Advanced anti-extension movement — one of the most effective ab exercises.' },
+  hanging_leg_raise:      { id:'hanging_leg_raise',     name:'Hanging Leg Raise',          muscleGroup:'core',      caliUrl:C('hanging-leg-raise'),      desc:'Dead hang from bar, raise legs to parallel or above without swinging. Targets hip flexors and lower abs.' },
+  russian_twist:          { id:'russian_twist',         name:'Russian Twist',              muscleGroup:'core',      caliUrl:C('russian-twist'),          desc:'Seated, feet off floor, lean back slightly. Rotate torso side to side holding a weight. Primarily targets the obliques.' },
+  dragon_flag:            { id:'dragon_flag',           name:'Dragon Flag',                muscleGroup:'core',      caliUrl:C('dragon-flag'),            desc:'On a bench, lower the entire rigid body as one unit then raise back using core strength only. Extreme total core exercise — popularized by Bruce Lee.' },
+};
+
+const MG_LABELS = {
+  all:'All', chest:'Chest', back:'Back', shoulders:'Shoulders',
+  biceps:'Biceps', triceps:'Triceps', legs:'Legs',
+  glutes:'Glutes', core:'Core', 'full body':'Full Body',
+};
+
+// ── Default splits ─────────────────────────────────────────────────────────
+const DEFAULT_SPLIT = {
+  push: ['incline_db_press','low_to_high_fly','cable_fly','dips','lateral_raise','tricep_pushdown','skull_crushers','cable_crunch'],
+  pull: ['weighted_pull_up','machine_single_arm_row','lat_pulldown','cable_lat_swing','single_arm_cable_pd','cable_curl','incline_db_curl','db_shoulder_press','back_extension','cable_crunch'],
+  legs: ['leg_press','bulgarian_split','rdl','leg_extension','hip_abductor','cable_lateral','db_shoulder_press','rear_delt_fly','back_extension','cable_crunch'],
+  arms: ['bicep_curl','hammer_curl','skull_crushers','overhead_tri'],
+};
+
+// ── Default entry per exercise per day  (weight, reps, sets) ──────────────
+const DEFAULT_ENTRY = {
+  push: {
+    incline_db_press:  { weight:75,   reps:8,  sets:4 },
+    low_to_high_fly:   { weight:35,   reps:8,  sets:4 },
+    cable_fly:         { weight:42.5, reps:8,  sets:4 },
+    dips:              { weight:25,   reps:8,  sets:4 },
+    lateral_raise:     { weight:45,   reps:8,  sets:4 },
+    tricep_pushdown:   { weight:80,   reps:8,  sets:4 },
+    skull_crushers:    { weight:90,   reps:8,  sets:4 },
+    cable_crunch:      { weight:105,  reps:15, sets:4 },
+  },
+  pull: {
+    weighted_pull_up:       { weight:25,   reps:8,  sets:4 },
+    machine_single_arm_row: { weight:130,  reps:8,  sets:4 },
+    lat_pulldown:           { weight:180,  reps:8,  sets:4 },
+    cable_lat_swing:        { weight:72.5, reps:8,  sets:4 },
+    single_arm_cable_pd:    { weight:72.5, reps:8,  sets:4 },
+    cable_curl:             { weight:72.5, reps:8,  sets:4 },
+    incline_db_curl:        { weight:35,   reps:8,  sets:4 },
+    db_shoulder_press:      { weight:65,   reps:8,  sets:4 },
+    back_extension:         { weight:25,   reps:8,  sets:4 },
+    cable_crunch:           { weight:105,  reps:15, sets:4 },
+  },
+  legs: {
+    leg_press:         { weight:225,  reps:8,  sets:4 },
+    bulgarian_split:   { weight:60,   reps:8,  sets:4 },
+    rdl:               { weight:60,   reps:8,  sets:4 },
+    leg_extension:     { weight:195,  reps:8,  sets:4 },
+    hip_abductor:      { weight:235,  reps:8,  sets:4 },
+    cable_lateral:     { weight:35,   reps:8,  sets:4 },
+    db_shoulder_press: { weight:70,   reps:8,  sets:4 },
+    rear_delt_fly:     { weight:40,   reps:8,  sets:4 },
+    back_extension:    { weight:25,   reps:8,  sets:4 },
+    cable_crunch:      { weight:105,  reps:15, sets:4 },
+  },
+};
+
+// ═══════════════════════════════════════════════════════
+// STATE
+// ═══════════════════════════════════════════════════════
+let S = {
+  activeDay: 'push',
+  split:   JSON.parse(JSON.stringify(DEFAULT_SPLIT)),
+  bank:    JSON.parse(JSON.stringify(DEFAULT_BANK)),
+  // session[day][exId] = { weight, reps, sets }
+  session: { push:{}, pull:{}, legs:{}, arms:{} },
+  history: [], // [{id,day,date,exercises:{exId:[{weight,reps}...]}}]
+};
+
+let BM = { targetId:null, targetDay:null, filter:'all' };
+let charts = {};
+let openSessions = {};
+let openDescs = {};
+let showAllHistory = { push:false, pull:false, legs:false, arms:false };
+
+// ── Persistence ────────────────────────────────────────────────────────────
+function loadState() {
+  try {
+    const raw = localStorage.getItem('liftlog_v3');
+    if (!raw) return;
+    const saved = JSON.parse(raw);
+    S = { ...S, ...saved };
+    S.bank = { ...DEFAULT_BANK, ...(saved.bank||{}) };
+  } catch(e) { console.error(e); }
+}
+function save() {
+  try { localStorage.setItem('liftlog_v3', JSON.stringify(S)); } catch(e) {}
+}
+
+// ── Helpers ────────────────────────────────────────────────────────────────
+function getLastSession(day) {
+  const s = S.history.filter(h => h.day === day);
+  return s.length ? s[s.length-1] : null;
+}
+function today() { return new Date().toISOString().split('T')[0]; }
+function formatDate(str) {
+  if (!str) return '';
+  return new Date(str+'T12:00:00').toLocaleDateString('en-US',{ weekday:'short', month:'short', day:'numeric', year:'numeric' });
+}
+function formatDateShort(str) {
+  if (!str) return '';
+  return new Date(str+'T12:00:00').toLocaleDateString('en-US',{ month:'short', day:'numeric', year:'numeric' });
+}
+function sessionsThisMonth() {
+  return S.history.filter(h => h.date.startsWith(today().slice(0,7))).length;
+}
+function getExerciseHistory(exId) {
+  return S.history.filter(h => h.exercises[exId]?.length).sort((a,b) => a.date.localeCompare(b.date));
+}
+function getPR(exId) {
+  let max = 0;
+  S.history.forEach(h => (h.exercises[exId]||[]).forEach(s => { const w=parseFloat(s.weight)||0; if(w>max) max=w; }));
+  return max;
+}
+function getDefaultEntry(exId, day) {
+  const d = DEFAULT_ENTRY[day]?.[exId];
+  return d ? { weight: d.weight, reps: d.reps, sets: d.sets } : { weight:'', reps:'', sets:3 };
+}
+function getWeekLabel(date) {
+  const d = new Date(date+'T12:00:00');
+  const mon = new Date(d); mon.setDate(d.getDate() - ((d.getDay()+6)%7));
+  return mon.toLocaleDateString('en-US',{ month:'short', day:'numeric' });
+}
+function getCurrentStreak() {
+  if (!S.history.length) return 0;
+  const dates = [...new Set(S.history.map(h => h.date))].sort((a,b) => b.localeCompare(a));
+  let streak = 0, ref = today();
+  for (const d of dates) {
+    const diff = (new Date(ref+'T12:00:00') - new Date(d+'T12:00:00')) / 86400000;
+    if (diff <= 1) { streak++; ref = d; }
+    else break;
+  }
+  return streak;
+}
+
+function svg(d, size=12) {
+  return `<svg width="${size}" height="${size}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${d}</svg>`;
+}
+const ICO = {
+  drag:  '<circle cx="9" cy="7" r="1.5" fill="currentColor" stroke="none"/><circle cx="15" cy="7" r="1.5" fill="currentColor" stroke="none"/><circle cx="9" cy="12" r="1.5" fill="currentColor" stroke="none"/><circle cx="15" cy="12" r="1.5" fill="currentColor" stroke="none"/><circle cx="9" cy="17" r="1.5" fill="currentColor" stroke="none"/><circle cx="15" cy="17" r="1.5" fill="currentColor" stroke="none"/>',
+  swap:  '<polyline points="17 1 21 5 17 9"/><path d="M3 11V9a4 4 0 0 1 4-4h14"/><polyline points="7 23 3 19 7 15"/><path d="M21 13v2a4 4 0 0 1-4 4H3"/>',
+  close: '<line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>',
+  plus:  '<line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/>',
+  check: '<polyline points="20 6 9 17 4 12"/>',
+  ext:   '<path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/>',
+  info:  '<circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/>',
+  chev:  '<polyline points="6 9 12 15 18 9"/>',
+};
+
+// ═══════════════════════════════════════════════════════
+// RENDER
+// ═══════════════════════════════════════════════════════
+function render() {
+  document.querySelectorAll('.nav-btn').forEach(b => b.classList.toggle('active', b.dataset.day === S.activeDay));
+  const main = document.getElementById('main');
+  if (S.activeDay === 'dashboard') {
+    main.innerHTML = dashboardHTML();
+    initCharts();
+  } else {
+    main.innerHTML = dayHTML(S.activeDay);
+    initSortable(S.activeDay);
+  }
+}
+
+// ── Day view ───────────────────────────────────────────────────────────────
+function dayHTML(day) {
+  const COLOR = { push:'push', pull:'pull', legs:'legs', arms:'arms' };
+  const LABEL = { push:'Push Day', pull:'Pull Day', legs:'Leg Day', arms:'Arms Day' };
+  const last = getLastSession(day);
+  const daySessions = S.history.filter(h => h.day === day).reverse();
+
+  const cards = S.split[day].length
+    ? S.split[day].map(id => cardHTML(id, day, last)).join('')
+    : `<div class="empty-state"><div class="empty-icon">💪</div><div class="empty-text">No exercises yet — add from the bank</div></div>`;
+
+  return `
+    <div class="day-header">
+      <div>
+        <div class="day-title" style="color:var(--${COLOR[day]})">${LABEL[day]}</div>
+        <div class="day-subtitle">${last ? 'Last logged: '+formatDateShort(last.date) : 'No previous sessions'}</div>
+      </div>
+      <button class="btn btn-ghost" onclick="openBankModal(null,'${day}')">${svg(ICO.plus)} Add</button>
+    </div>
+    <div class="exercises-list" id="list-${day}">${cards}</div>
+    <div class="workout-actions">
+      <button class="btn btn-primary" onclick="logWorkout('${day}')">${svg(ICO.check)} Log Workout</button>
+      <button class="btn btn-ghost"   onclick="clearDay('${day}')">Clear</button>
+    </div>
+    ${sessionHistoryHTML(day, daySessions)}`;
+}
+
+// ── Exercise card ──────────────────────────────────────────────────────────
+function cardHTML(exId, day, lastSession) {
+  const ex = S.bank[exId];
+  if (!ex) return '';
+
+  // Init session entry with defaults
+  if (!S.session[day][exId]) {
+    S.session[day][exId] = getDefaultEntry(exId, day);
+  }
+  const { weight, reps, sets } = S.session[day][exId];
+
+  // Previous session: summarise as "Nsets × Wlb × R reps"
+  const prevSets = lastSession?.exercises?.[exId] || [];
+  let prevHTML = '';
+  if (prevSets.length) {
+    const prevW = prevSets[0]?.weight ?? '';
+    const prevR = prevSets[0]?.reps ?? '';
+    const prevN = prevSets.length;
+    prevHTML = `
+      <div class="card-prev">
+        <span class="prev-label">Last · ${formatDateShort(lastSession.date)}</span>
+        <span class="prev-chip">${prevN} × ${prevW}lb × ${prevR} reps</span>
+      </div>`;
+  }
+
+  const isDescOpen = !!openDescs[exId+day];
+  const descHTML = ex.desc ? `
+    <div class="card-desc ${isDescOpen?'open':''}" id="desc-${exId}-${day}">
+      ${ex.desc}
+      ${ex.caliUrl ? `<br><a class="desc-src" href="${ex.caliUrl}" target="_blank" rel="noopener">View on Calistree ↗</a>` : ''}
+    </div>` : '';
+
+  const caliLink = ex.caliUrl
+    ? `<a class="cali-link" href="${ex.caliUrl}" target="_blank" rel="noopener" title="View on Calistree" onclick="event.stopPropagation()">${svg(ICO.ext,9)}</a>`
+    : '';
+  const infoBtn = ex.desc
+    ? `<button class="icon-btn ${isDescOpen?'is-active':''}" onclick="toggleDesc('${exId}','${day}')" title="About this exercise">${svg(ICO.info)}</button>`
+    : '';
+
+  return `
+    <div class="exercise-card" data-id="${exId}">
+      <div class="card-header">
+        <div class="drag-handle">${svg(ICO.drag,14)}</div>
+        <div class="card-name">${ex.name}${caliLink}</div>
+        <div class="card-actions">
+          ${infoBtn}
+          <button class="icon-btn swap"   onclick="openBankModal('${exId}','${day}')"  title="Swap exercise">${svg(ICO.swap)}</button>
+          <button class="icon-btn danger" onclick="removeFromDay('${exId}','${day}')"  title="Remove">${svg(ICO.close)}</button>
+        </div>
+      </div>
+      ${descHTML}
+      ${prevHTML}
+      <div class="card-body">
+        <div class="set-control-row">
+          <div class="set-field">
+            <div class="set-field-label">Weight (lbs)</div>
+            <input class="set-input" type="number" min="0" step="2.5" inputmode="decimal"
+              placeholder="0" value="${weight}"
+              onchange="updateEntry('${exId}','${day}','weight',this.value)">
+          </div>
+          <div class="set-field">
+            <div class="set-field-label">Reps</div>
+            <input class="set-input" type="number" min="1" step="1" inputmode="numeric"
+              placeholder="0" value="${reps}"
+              onchange="updateEntry('${exId}','${day}','reps',this.value)">
+          </div>
+          <div class="sets-counter">
+            <div class="sets-counter-label">Sets</div>
+            <div class="sets-counter-control">
+              <button class="sets-counter-btn" onclick="changeSetCount('${exId}','${day}',-1)">−</button>
+              <div class="sets-counter-val" id="sets-count-${exId}-${day}">${sets}</div>
+              <button class="sets-counter-btn" onclick="changeSetCount('${exId}','${day}',+1)">+</button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>`;
+}
+
+// ── Description toggle ─────────────────────────────────────────────────────
+function toggleDesc(exId, day) {
+  const key = exId+day;
+  openDescs[key] = !openDescs[key];
+  const el  = document.getElementById(`desc-${exId}-${day}`);
+  const card = el?.closest('.exercise-card');
+  if (el) el.classList.toggle('open', openDescs[key]);
+  if (card) {
+    const btn = card.querySelector(`button[onclick*="toggleDesc"]`);
+    if (btn) btn.classList.toggle('is-active', openDescs[key]);
+  }
+}
+
+// ── Session entry helpers ──────────────────────────────────────────────────
+function updateEntry(exId, day, field, val) {
+  if (!S.session[day][exId]) S.session[day][exId] = getDefaultEntry(exId, day);
+  S.session[day][exId][field] = val === '' ? '' : (field === 'sets' ? parseInt(val)||1 : parseFloat(val)||val);
+  save();
+}
+
+function changeSetCount(exId, day, delta) {
+  if (!S.session[day][exId]) S.session[day][exId] = getDefaultEntry(exId, day);
+  const current = parseInt(S.session[day][exId].sets)||1;
+  const next = Math.max(1, Math.min(20, current + delta));
+  S.session[day][exId].sets = next;
+  save();
+  const el = document.getElementById(`sets-count-${exId}-${day}`);
+  if (el) el.textContent = next;
+}
+
+// ── Day actions ────────────────────────────────────────────────────────────
+function switchDay(day) { S.activeDay = day; render(); }
+
+function logWorkout(day) {
+  const logged = {};
+  S.split[day].forEach(exId => {
+    const entry = S.session[day][exId];
+    if (!entry || (entry.weight === '' && entry.reps === '')) return;
+    const sets = [];
+    const n = parseInt(entry.sets)||1;
+    for (let i = 0; i < n; i++) sets.push({ weight: entry.weight, reps: entry.reps });
+    logged[exId] = sets;
+  });
+  if (!Object.keys(logged).length) { showToast('Enter weight/reps before logging','error'); return; }
+
+  const prs = [];
+  Object.keys(logged).forEach(exId => {
+    const maxW = parseFloat(logged[exId][0]?.weight)||0;
+    if (maxW > 0 && maxW > getPR(exId)) prs.push((S.bank[exId]?.name||exId)+' '+maxW+'lb');
+  });
+
+  S.history.push({ id:Date.now().toString(), day, date:today(), exercises:logged });
+  S.session[day] = {};
+  save(); render();
+  if (prs.length) showToast('🏆 New PR: '+prs[0],'success');
+  else showToast('Workout logged! 💪','success');
+}
+
+function clearDay(day) {
+  if (!confirm("Clear today's unsaved session data?")) return;
+  S.session[day] = {};
+  save(); render();
+}
+
+function removeFromDay(exId, day) {
+  S.split[day] = S.split[day].filter(id => id!==exId);
+  delete S.session[day][exId];
+  save(); render();
+}
+
+// ── Session history ────────────────────────────────────────────────────────
+function sessionHistoryHTML(day, sessions) {
+  if (!sessions.length) return `
+    <div class="section-divider">
+      <div class="section-divider-line"></div>
+      <div class="section-divider-label">Session History</div>
+      <div class="section-divider-line"></div>
+    </div>
+    <div class="empty-state" style="padding:32px 24px">
+      <div class="empty-icon">📋</div>
+      <div class="empty-text">No sessions logged yet</div>
+    </div>`;
+
+  const PREVIEW = 5;
+  const showAll = showAllHistory[day];
+  const visible = showAll ? sessions : sessions.slice(0,PREVIEW);
+  const moreBtn = !showAll && sessions.length > PREVIEW
+    ? `<button class="history-show-more" onclick="toggleShowAll('${day}')">Show all ${sessions.length} sessions</button>`
+    : showAll && sessions.length > PREVIEW
+    ? `<button class="history-show-more" onclick="toggleShowAll('${day}')">Show less</button>`
+    : '';
+
+  return `
+    <div class="section-divider">
+      <div class="section-divider-line"></div>
+      <div class="section-divider-label">Session History</div>
+      <span class="history-count-badge">${sessions.length}</span>
+      <div class="section-divider-line"></div>
+    </div>
+    <div>${visible.map(s => sessionRowHTML(s)).join('')}${moreBtn}</div>`;
+}
+
+function sessionRowHTML(session) {
+  const isOpen = !!openSessions[session.id];
+  const exIds  = Object.keys(session.exercises);
+  const previewPills = exIds.slice(0,3).map(id => {
+    const ex = S.bank[id]; if(!ex) return '';
+    const w = session.exercises[id]?.[0]?.weight;
+    return `<span class="session-meta-pill">${ex.name.split(' ')[0]}${w?' '+w+'lb':''}</span>`;
+  }).join('');
+  const bodyHTML = isOpen ? sessionBodyHTML(session) : '';
+
+  return `
+    <div class="session-item ${isOpen?'open':''}" id="srow-${session.id}">
+      <div class="session-item-header" onclick="toggleSession('${session.id}')">
+        <div class="session-date-label">${formatDate(session.date)}</div>
+        <div class="session-meta-pills">${previewPills}</div>
+        <div style="font-size:11px;color:var(--muted);margin-left:8px;flex-shrink:0">${exIds.length} exercises</div>
+        <div class="session-chevron">${svg(ICO.chev,13)}</div>
+      </div>
+      <div class="session-body" id="sbody-${session.id}">${bodyHTML}</div>
+    </div>`;
+}
+
+function sessionBodyHTML(session) {
+  const rows = Object.keys(session.exercises).map(exId => {
+    const ex    = S.bank[exId];
+    const sets  = session.exercises[exId]||[];
+    const pr    = getPR(exId);
+    const w     = parseFloat(sets[0]?.weight)||0;
+    const r     = parseInt(sets[0]?.reps)||0;
+    const isPR  = w > 0 && w >= pr;
+    return `
+      <div class="session-ex-row">
+        <div class="session-ex-header">
+          <div class="session-ex-name">${ex?ex.name:exId}${isPR?'<span class="pr-tag">PR</span>':''}</div>
+          <div class="session-ex-stats">${sets.length} × ${w}lb × ${r} reps</div>
+        </div>
+      </div>`;
+  }).join('');
+  return `${rows}<div class="session-footer">
+    <div class="session-date-edit">
+      <span style="font-size:11px;color:var(--muted)">Date:</span>
+      <input class="date-input-inline" type="date" id="date-edit-${session.id}" value="${session.date}">
+      <button class="btn-save-date" onclick="saveSessionDate('${session.id}')">Save</button>
+    </div>
+    <button class="btn-danger-sm" onclick="deleteSession('${session.id}')">Delete</button>
+  </div>`;
+}
+
+function toggleSession(id) {
+  openSessions[id] = !openSessions[id];
+  const row  = document.getElementById(`srow-${id}`);
+  const body = document.getElementById(`sbody-${id}`);
+  if (!row||!body) return;
+  row.classList.toggle('open', openSessions[id]);
+  if (openSessions[id]) {
+    const s = S.history.find(h => h.id===id);
+    if (s) body.innerHTML = sessionBodyHTML(s);
+  }
+}
+
+function deleteSession(id) {
+  if (!confirm('Delete this session? This cannot be undone.')) return;
+  S.history = S.history.filter(h => h.id!==id);
+  delete openSessions[id];
+  save(); render();
+}
+
+function saveSessionDate(id) {
+  const input = document.getElementById(`date-edit-${id}`);
+  if (!input || !input.value) return;
+  const session = S.history.find(h => h.id===id);
+  if (!session) return;
+  session.date = input.value;
+  save(); render();
+  showToast('Date updated','success');
+}
+
+function toggleShowAll(day) { showAllHistory[day]=!showAllHistory[day]; render(); }
+
+// ── Bank modal ─────────────────────────────────────────────────────────────
+function openBankModal(targetId, day) {
+  BM.targetId=targetId; BM.targetDay=day; BM.filter='all';
+  document.getElementById('modal-title').textContent = targetId ? 'Swap Exercise' : 'Add Exercise';
+  document.getElementById('bank-search').value = '';
+  renderBankFilters(); renderBankGrid();
+  document.getElementById('bank-modal').classList.add('open');
+}
+function closeBankModal() { document.getElementById('bank-modal').classList.remove('open'); }
+function handleModalBackdrop(e) { if(e.target.classList.contains('modal-overlay')) closeBankModal(); }
+
+function renderBankFilters() {
+  const keys = ['all','chest','back','shoulders','biceps','triceps','legs','glutes','core','full body'];
+  document.getElementById('bank-filters').innerHTML = keys.map(k =>
+    `<button class="filter-pill ${k===BM.filter?'active':''}" onclick="setBankFilter('${k}')">${MG_LABELS[k]}</button>`
+  ).join('');
+}
+function setBankFilter(cat) { BM.filter=cat; renderBankFilters(); renderBankGrid(); }
+
+function renderBankGrid() {
+  const query = (document.getElementById('bank-search')?.value||'').toLowerCase().trim();
+  const split = S.split[BM.targetDay]||[];
+  let exs = Object.values(S.bank).sort((a,b) => {
+    const mg=(a.muscleGroup||'').localeCompare(b.muscleGroup||'');
+    return mg!==0 ? mg : a.name.localeCompare(b.name);
+  });
+  if (BM.filter!=='all') exs = exs.filter(e => e.muscleGroup===BM.filter);
+  if (query) exs = exs.filter(e => e.name.toLowerCase().includes(query)||(e.muscleGroup||'').includes(query));
+
+  if (!exs.length) { document.getElementById('bank-grid').innerHTML=`<div class="bank-empty">No exercises found</div>`; return; }
+  document.getElementById('bank-grid').innerHTML = exs.map(ex => {
+    const isSel = ex.id===BM.targetId;
+    const inDay = split.includes(ex.id)&&!isSel;
+    const extLnk = ex.caliUrl
+      ? `<a class="bank-ext-link" href="${ex.caliUrl}" target="_blank" rel="noopener" title="View on Calistree" onclick="event.stopPropagation()">${svg(ICO.ext,8)}</a>`
+      : '';
+    return `
+      <div class="bank-item ${isSel?'selected':inDay?'in-day':''}" onclick="selectExercise('${ex.id}')">
+        <div class="bank-item-name">${ex.name}</div>
+        <div class="bank-mg">${MG_LABELS[ex.muscleGroup]||ex.muscleGroup||''}</div>
+        ${extLnk}
+      </div>`;
+  }).join('');
+}
+
+function selectExercise(exId) {
+  const day = BM.targetDay;
+  if (!day) { closeBankModal(); return; }
+  if (BM.targetId) {
+    const idx = S.split[day].indexOf(BM.targetId);
+    if (idx!==-1) {
+      S.split[day][idx] = exId;
+      if (S.session[day][BM.targetId]) { S.session[day][exId]=S.session[day][BM.targetId]; delete S.session[day][BM.targetId]; }
+    }
+  } else {
+    if (S.split[day].includes(exId)) { showToast('Already in this day','error'); return; }
+    S.split[day].push(exId);
+  }
+  save(); closeBankModal(); render();
+}
+
+function addCustomExercise() {
+  const name = document.getElementById('new-ex-name').value.trim();
+  const mg   = document.getElementById('new-ex-mg').value;
+  if (!name) { showToast('Enter a name','error'); return; }
+  const id = name.toLowerCase().replace(/[^a-z0-9]+/g,'_').replace(/^_|_$/g,'')+'_'+Date.now();
+  S.bank[id] = { id, name, muscleGroup:mg };
+  document.getElementById('new-ex-name').value = '';
+  save(); renderBankGrid();
+  showToast(`"${name}" added`,'success');
+}
+
+// ── Sortable ───────────────────────────────────────────────────────────────
+function initSortable(day) {
+  const el = document.getElementById(`list-${day}`);
+  if (!el) return;
+  Sortable.create(el, {
+    animation:140, handle:'.drag-handle', ghostClass:'sortable-ghost',
+    onEnd(evt) {
+      const arr = S.split[day];
+      const [moved] = arr.splice(evt.oldIndex,1);
+      arr.splice(evt.newIndex,0,moved);
+      save();
+    }
+  });
+}
+
+// ═══════════════════════════════════════════════════════
+// DASHBOARD
+// ═══════════════════════════════════════════════════════
+function dashboardHTML() {
+  const total     = S.history.length;
+  const streak    = getCurrentStreak();
+  const thisMonth = sessionsThisMonth();
+  const byDay     = d => S.history.filter(h => h.day===d).length;
+
+  // Most improved: biggest lb gain from first to last session per exercise
+  let mostImproved = null, mostImprovedGain = 0;
+  const allExIds = [...new Set(S.history.flatMap(h => Object.keys(h.exercises)))];
+  allExIds.forEach(exId => {
+    const sessions = getExerciseHistory(exId);
+    if (sessions.length < 2) return;
+    const first = parseFloat(sessions[0].exercises[exId]?.[0]?.weight)||0;
+    const last  = parseFloat(sessions[sessions.length-1].exercises[exId]?.[0]?.weight)||0;
+    const gain  = last - first;
+    if (gain > mostImprovedGain) { mostImprovedGain = gain; mostImproved = exId; }
+  });
+
+  const exWithHistory = allExIds.map(id => S.bank[id]).filter(Boolean).sort((a,b) => a.name.localeCompare(b.name));
+  const opts = exWithHistory.map(ex => `<option value="${ex.id}">${ex.name}</option>`).join('');
+  const hasData = exWithHistory.length > 0;
+
+  return `
+    <div class="day-header">
+      <div>
+        <div class="day-title" style="color:var(--dash)">Dashboard</div>
+        <div class="day-subtitle">Your progress over time</div>
+      </div>
+    </div>
+
+    <!-- ── Top stats ── -->
+    <div class="stats-grid">
+      <div class="stat-card">
+        <div class="stat-label">Total Sessions</div>
+        <div class="stat-value" style="color:var(--primary)">${total}</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-label">This Month</div>
+        <div class="stat-value" style="color:var(--primary)">${thisMonth}</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-label">Streak</div>
+        <div class="stat-value" style="color:var(--orange)">${streak}</div>
+        <div class="stat-sub">day${streak!==1?'s':''} in a row</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-label">Push</div>
+        <div class="stat-value" style="color:var(--push)">${byDay('push')}</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-label">Pull</div>
+        <div class="stat-value" style="color:var(--pull)">${byDay('pull')}</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-label">Legs</div>
+        <div class="stat-value" style="color:var(--legs)">${byDay('legs')}</div>
+      </div>
+    </div>
+
+    ${hasData ? `
+    <!-- ── Max Weight Over Time ── -->
+    <div class="chart-card">
+      <div class="chart-header">
+        <div class="chart-title">Max Weight Over Time</div>
+        <select class="chart-select" id="sel-weight" onchange="updateWeightChart()">${opts}</select>
+      </div>
+      <canvas id="chart-weight" height="160"></canvas>
+      <div class="hist-table-wrap" id="hist-table-wrap"></div>
+    </div>
+
+    <!-- ── Sessions Per Week ── -->
+    <div class="chart-card">
+      <div class="chart-header">
+        <div class="chart-title">Sessions Per Week</div>
+      </div>
+      <canvas id="chart-freq" height="130"></canvas>
+    </div>
+
+    <!-- ── Personal Records ── -->
+    <div class="chart-card">
+      <div class="chart-header">
+        <div class="chart-title">Personal Records</div>
+      </div>
+      ${prTableHTML()}
+    </div>
+
+    ${mostImproved ? `
+    <!-- ── Most Improved ── -->
+    <div class="chart-card">
+      <div class="chart-header">
+        <div class="chart-title">Most Improved Exercise</div>
+      </div>
+      ${mostImprovedHTML(mostImproved)}
+    </div>` : ''}
+
+    ` : `<div class="empty-state"><div class="empty-icon">📊</div><div class="empty-text">Log workouts to see your progress here</div></div>`}`;
+}
+
+function prTableHTML() {
+  const allExIds = [...new Set(S.history.flatMap(h => Object.keys(h.exercises)))];
+  const rows = allExIds
+    .map(exId => {
+      const ex = S.bank[exId]; if (!ex) return null;
+      const sessions = getExerciseHistory(exId);
+      if (!sessions.length) return null;
+      const pr = getPR(exId);
+      const first = parseFloat(sessions[0].exercises[exId]?.[0]?.weight)||0;
+      const gain  = pr - first;
+      const lastDate = sessions[sessions.length-1].date;
+      return { ex, pr, gain, lastDate, sessions: sessions.length };
+    })
+    .filter(Boolean)
+    .sort((a,b) => b.pr - a.pr);
+
+  if (!rows.length) return '<p style="font-size:13px;color:var(--muted);padding:12px 0">No data yet</p>';
+
+  return `<div class="pr-table-wrap"><table class="pr-table">
+    <thead><tr><th>Exercise</th><th>PR Weight</th><th>Gain</th><th>Sessions</th><th>Last Logged</th></tr></thead>
+    <tbody>${rows.map(r => `<tr>
+      <td>${r.ex.name}</td>
+      <td class="mono">${r.pr} lb</td>
+      <td class="mono ${r.gain>0?'pr-gain-pos':'pr-gain-neu'}">${r.gain>0?'+':''}${r.gain} lb</td>
+      <td class="mono">${r.sessions}</td>
+      <td>${formatDateShort(r.lastDate)}</td>
+    </tr>`).join('')}</tbody>
+  </table></div>`;
+}
+
+function mostImprovedHTML(exId) {
+  const ex = S.bank[exId]; if (!ex) return '';
+  const sessions = getExerciseHistory(exId);
+  const first = parseFloat(sessions[0].exercises[exId]?.[0]?.weight)||0;
+  const last  = parseFloat(sessions[sessions.length-1].exercises[exId]?.[0]?.weight)||0;
+  const gain  = last - first;
+  const pct   = first > 0 ? Math.round((gain/first)*100) : 0;
+  return `
+    <div style="display:flex;align-items:center;gap:20px;flex-wrap:wrap">
+      <div>
+        <div style="font-size:20px;font-weight:700">${ex.name}</div>
+        <div style="font-size:13px;color:var(--muted-light);margin-top:3px">${first} lb → ${last} lb over ${sessions.length} sessions</div>
+      </div>
+      <div style="margin-left:auto;text-align:right">
+        <div style="font-size:28px;font-weight:700;color:var(--success)">+${gain} lb</div>
+        <div style="font-size:12px;color:var(--muted-light)">${pct}% increase</div>
+      </div>
+    </div>`;
+}
+
+function buildHistTable(exId, sessions) {
+  const pr = getPR(exId);
+  const rows = [...sessions].reverse().map(s => {
+    const sets = s.exercises[exId]||[];
+    const w    = parseFloat(sets[0]?.weight)||0;
+    const r    = parseInt(sets[0]?.reps)||0;
+    const n    = sets.length;
+    const isPR = w > 0 && w >= pr;
+    return `<tr>
+      <td>${formatDate(s.date)}${isPR?'<span class="pr-tag" style="margin-left:6px">PR</span>':''}</td>
+      <td class="mono">${n} sets</td>
+      <td class="mono">${w} lb</td>
+      <td class="mono">${r} reps</td>
+    </tr>`;
+  }).join('');
+  return `<table class="hist-table">
+    <thead><tr><th>Date</th><th>Sets</th><th>Weight</th><th>Reps</th></tr></thead>
+    <tbody>${rows}</tbody>
+  </table>`;
+}
+
+const CHART_OPTS = {
+  responsive:true,
+  plugins:{
+    legend:{ display:false },
+    tooltip:{ backgroundColor:'#1c1c1c', borderColor:'#262626', borderWidth:1, titleColor:'#f1f5f9', bodyColor:'#9ca3af' }
+  },
+  scales:{
+    x:{ grid:{ color:'#1a1a1a' }, ticks:{ color:'#4b5563', maxRotation:45 } },
+    y:{ grid:{ color:'#1a1a1a' }, ticks:{ color:'#4b5563' } }
+  }
+};
+
+function initCharts() {
+  if (document.getElementById('chart-weight')) {
+    updateWeightChart();
+    buildFreqChart();
+  }
+}
+
+function updateWeightChart() {
+  const sel = document.getElementById('sel-weight'); if(!sel) return;
+  const sessions = getExerciseHistory(sel.value);
+  const data = sessions.map(s => parseFloat(s.exercises[sel.value]?.[0]?.weight)||0);
+  if (charts.weight) charts.weight.destroy();
+  charts.weight = new Chart(document.getElementById('chart-weight').getContext('2d'), {
+    type:'line',
+    data:{
+      labels: sessions.map(s => formatDateShort(s.date)),
+      datasets:[{ label:'Weight', data, borderColor:'#818cf8', backgroundColor:'rgba(129,140,248,0.1)', fill:true, tension:0.3, pointBackgroundColor:'#818cf8', pointRadius:5, pointHoverRadius:7 }]
+    },
+    options:{ ...CHART_OPTS, plugins:{ ...CHART_OPTS.plugins, tooltip:{ ...CHART_OPTS.plugins.tooltip,
+      callbacks:{ label: ctx => ' '+ctx.parsed.y+' lb' } } } }
+  });
+  const wrap = document.getElementById('hist-table-wrap');
+  if (wrap) wrap.innerHTML = buildHistTable(sel.value, sessions);
+}
+
+function buildFreqChart() {
+  // Group sessions by week (Mon–Sun) for the past 12 weeks
+  const weekMap = {};
+  S.history.forEach(h => {
+    const lbl = getWeekLabel(h.date);
+    weekMap[lbl] = (weekMap[lbl]||0) + 1;
+  });
+  // Build ordered weeks
+  const now = new Date();
+  const labels = [], data = [];
+  for (let i = 11; i >= 0; i--) {
+    const d = new Date(now); d.setDate(now.getDate() - now.getDay() - (i*7) + 1);
+    const lbl = d.toLocaleDateString('en-US',{ month:'short', day:'numeric' });
+    labels.push(lbl);
+    data.push(weekMap[lbl]||0);
+  }
+  if (charts.freq) charts.freq.destroy();
+  charts.freq = new Chart(document.getElementById('chart-freq').getContext('2d'), {
+    type:'bar',
+    data:{ labels, datasets:[{ label:'Sessions', data, backgroundColor:'rgba(129,140,248,0.5)', borderColor:'#818cf8', borderWidth:1, borderRadius:4 }] },
+    options:{ ...CHART_OPTS, scales:{ ...CHART_OPTS.scales, y:{ ...CHART_OPTS.scales.y, ticks:{ ...CHART_OPTS.scales.y.ticks, stepSize:1 } } },
+      plugins:{ ...CHART_OPTS.plugins, tooltip:{ ...CHART_OPTS.plugins.tooltip, callbacks:{ label: ctx => ' '+ctx.parsed.y+' session'+(ctx.parsed.y!==1?'s':'') } } } }
+  });
+}
+
+// ── Toast ──────────────────────────────────────────────────────────────────
+let _tt;
+function showToast(msg, type='success') {
+  const el = document.getElementById('toast');
+  el.textContent = msg; el.className = `toast ${type} show`;
+  clearTimeout(_tt);
+  _tt = setTimeout(() => el.classList.remove('show'), 3000);
+}
+
+// ── Init ───────────────────────────────────────────────────────────────────
+document.getElementById('header-date').textContent =
+  new Date().toLocaleDateString('en-US',{ weekday:'long', month:'long', day:'numeric' });
+
+// Register service worker for PWA / offline support
+if ('serviceWorker' in navigator) {
+  navigator.serviceWorker.register('./sw.js').catch(() => {});
+}
+
+loadState();
+render();
+</script>
+</body>
+</html>
