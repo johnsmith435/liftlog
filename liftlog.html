@@ -32,7 +32,7 @@
     /* Header */
     .header { display: flex; align-items: center; justify-content: space-between; padding: 18px 24px; border-bottom: 1px solid var(--border); position: sticky; top: 0; background: var(--bg); z-index: 20; }
     /* PWA standalone: push header content below notch/Dynamic Island */
-    html.pwa .header { padding-top: max(59px, env(safe-area-inset-top)); }
+    html.pwa .header { padding-top: max(36px, env(safe-area-inset-top)); }
     .logo { font-size: 18px; font-weight: 700; letter-spacing: -0.3px; }
     .logo span { color: var(--primary); }
     .header-date { font-size: 12px; color: var(--muted-light); }
@@ -263,7 +263,7 @@
 <body>
 
 <div class="header">
-  <div class="logo">Lift<span>Log</span></div>
+  <div class="logo">Lift<span>Log</span> 🙂</div>
   <div style="display:flex;align-items:center;gap:10px">
     <div class="header-date" id="header-date"></div>
     <button class="theme-toggle" id="theme-toggle" onclick="toggleTheme()" title="Toggle light/dark mode">🌙</button>
