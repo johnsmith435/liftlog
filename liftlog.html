@@ -227,6 +227,28 @@
     .toast.error   { border-color: rgba(248,113,113,0.4); color: var(--danger); }
     .sortable-ghost { opacity: 0.25; }
 
+    /* Light theme overrides */
+    html[data-theme="light"] {
+      --bg: #f5f5f5; --card: #ffffff; --elevated: #ececec;
+      --border: #d4d4d4; --border-hover: #b0b0b0;
+      --primary: #6366f1; --primary-dim: rgba(99,102,241,0.10);
+      --push: #ea580c; --push-dim: rgba(234,88,12,0.10);
+      --pull: #2563eb; --pull-dim: rgba(37,99,235,0.10);
+      --legs: #16a34a; --legs-dim: rgba(22,163,74,0.10);
+      --arms: #9333ea; --arms-dim: rgba(147,51,234,0.10);
+      --dash: #db2777; --text: #111111;
+      --muted: #9ca3af; --muted-light: #6b7280;
+      --danger: #dc2626; --success: #16a34a; --orange: #ea580c;
+    }
+    html[data-theme="light"] .session-item-header:hover { background: rgba(0,0,0,0.03); }
+    html[data-theme="light"] .modal-overlay { background: rgba(0,0,0,0.5); }
+    html[data-theme="light"] .pr-table tr:hover td { background: rgba(0,0,0,0.03); }
+    html[data-theme="light"] .hist-table tr:hover td { background: rgba(0,0,0,0.03); }
+
+    /* Theme toggle button */
+    .theme-toggle { width: 32px; height: 32px; display: inline-flex; align-items: center; justify-content: center; border-radius: var(--r-sm); border: 1px solid var(--border); background: transparent; color: var(--muted-light); cursor: pointer; font-size: 15px; transition: all 0.15s; flex-shrink: 0; }
+    .theme-toggle:hover { color: var(--text); border-color: var(--border-hover); background: var(--elevated); }
+
     @media (max-width: 600px) {
       .main { padding: 14px; }
       .stats-grid { grid-template-columns: 1fr 1fr; }
@@ -241,7 +263,10 @@
 
 <div class="header">
   <div class="logo">Lift<span>Log</span></div>
-  <div class="header-date" id="header-date"></div>
+  <div style="display:flex;align-items:center;gap:10px">
+    <div class="header-date" id="header-date"></div>
+    <button class="theme-toggle" id="theme-toggle" onclick="toggleTheme()" title="Toggle light/dark mode">🌙</button>
+  </div>
 </div>
 <div class="nav">
   <button class="nav-btn active" data-day="push"      onclick="switchDay('push')"><span class="nav-dot"></span>Push</button>
@@ -441,9 +466,20 @@ let openDescs = {};
 let showAllHistory = { push:false, pull:false, legs:false, arms:false };
 
 // ── Persistence ────────────────────────────────────────────────────────────
+// ── Storage key is PERMANENT — never change this ──────────────────────────
+const STORAGE_KEY = 'liftlog_data';
+
 function loadState() {
   try {
-    const raw = localStorage.getItem('liftlog_v3');
+    // Migrate from any previous key versions
+    for (const oldKey of ['liftlog_v3','liftlog_v2']) {
+      const old = localStorage.getItem(oldKey);
+      if (old && !localStorage.getItem(STORAGE_KEY)) {
+        localStorage.setItem(STORAGE_KEY, old);
+        localStorage.removeItem(oldKey);
+      }
+    }
+    const raw = localStorage.getItem(STORAGE_KEY);
     if (!raw) return;
     const saved = JSON.parse(raw);
     S = { ...S, ...saved };
@@ -451,7 +487,39 @@ function loadState() {
   } catch(e) { console.error(e); }
 }
 function save() {
-  try { localStorage.setItem('liftlog_v3', JSON.stringify(S)); } catch(e) {}
+  try { localStorage.setItem(STORAGE_KEY, JSON.stringify(S)); } catch(e) {}
+}
+
+function exportData() {
+  const blob = new Blob([JSON.stringify(S, null, 2)], { type:'application/json' });
+  const url  = URL.createObjectURL(blob);
+  const a    = document.createElement('a');
+  const date = new Date().toISOString().slice(0,10);
+  a.href = url; a.download = `liftlog-backup-${date}.json`; a.click();
+  URL.revokeObjectURL(url);
+  showToast('Data exported','success');
+}
+
+function importData() {
+  const input = document.createElement('input');
+  input.type = 'file'; input.accept = '.json';
+  input.onchange = e => {
+    const file = e.target.files[0]; if (!file) return;
+    const reader = new FileReader();
+    reader.onload = ev => {
+      try {
+        const saved = JSON.parse(ev.target.result);
+        if (!saved.history || !saved.split) { showToast('Invalid backup file','error'); return; }
+        if (!confirm('This will replace all current data with the backup. Continue?')) return;
+        S = { ...S, ...saved };
+        S.bank = { ...DEFAULT_BANK, ...(saved.bank||{}) };
+        save(); render();
+        showToast('Data imported','success');
+      } catch { showToast('Could not read file','error'); }
+    };
+    reader.readAsText(file);
+  };
+  input.click();
 }
 
 // ── Helpers ────────────────────────────────────────────────────────────────
@@ -498,6 +566,32 @@ function getCurrentStreak() {
     else break;
   }
   return streak;
+}
+
+// Epley formula: weight × (1 + reps/30)
+function calc1RM(weight, reps) {
+  const w = parseFloat(weight)||0, r = parseInt(reps)||0;
+  if (!w || !r) return 0;
+  if (r === 1) return w;
+  return Math.round(w * (1 + r / 30));
+}
+
+function getBest1RM(exId) {
+  let best = 0;
+  S.history.forEach(h => {
+    const s = h.exercises[exId]?.[0];
+    if (!s) return;
+    const v = calc1RM(s.weight, s.reps);
+    if (v > best) best = v;
+  });
+  return best;
+}
+
+function daysSince(day) {
+  const sessions = S.history.filter(h => h.day === day);
+  if (!sessions.length) return null;
+  const last = sessions.map(h => h.date).sort().pop();
+  return Math.floor((new Date(today()+'T12:00:00') - new Date(last+'T12:00:00')) / 86400000);
 }
 
 function svg(d, size=12) {
@@ -928,11 +1022,29 @@ function dashboardHTML() {
   const opts = exWithHistory.map(ex => `<option value="${ex.id}">${ex.name}</option>`).join('');
   const hasData = exWithHistory.length > 0;
 
+  // Days since per day
+  const DAY_COLOR = { push:'var(--push)', pull:'var(--pull)', legs:'var(--legs)', arms:'var(--arms)' };
+  const DAY_LABEL = { push:'Push', pull:'Pull', legs:'Legs', arms:'Arms' };
+  const daysSincePanels = ['push','pull','legs','arms'].map(d => {
+    const n = daysSince(d);
+    const label = n === null ? '—' : n === 0 ? 'Today' : n === 1 ? 'Yesterday' : `${n}d ago`;
+    const urgent = n !== null && n >= 5;
+    return `<div class="stat-card">
+      <div class="stat-label">${DAY_LABEL[d]}</div>
+      <div class="stat-value" style="color:${urgent ? 'var(--danger)' : DAY_COLOR[d]}">${label}</div>
+      <div class="stat-sub">last ${DAY_LABEL[d].toLowerCase()} session</div>
+    </div>`;
+  }).join('');
+
   return `
     <div class="day-header">
       <div>
         <div class="day-title" style="color:var(--dash)">Dashboard</div>
         <div class="day-subtitle">Your progress over time</div>
+      </div>
+      <div style="display:flex;gap:6px;flex-shrink:0;margin-top:4px">
+        <button class="btn btn-ghost" style="padding:7px 12px;font-size:12px" onclick="exportData()">Export</button>
+        <button class="btn btn-ghost" style="padding:7px 12px;font-size:12px" onclick="importData()">Import</button>
       </div>
     </div>
 
@@ -965,6 +1077,16 @@ function dashboardHTML() {
       </div>
     </div>
 
+    <!-- ── Days since last trained ── -->
+    <div style="margin-bottom:20px">
+      <div class="section-divider" style="margin-top:0;margin-bottom:12px">
+        <div class="section-divider-line"></div>
+        <div class="section-divider-label">Days Since Last Trained</div>
+        <div class="section-divider-line"></div>
+      </div>
+      <div class="stats-grid">${daysSincePanels}</div>
+    </div>
+
     ${hasData ? `
     <!-- ── Max Weight Over Time ── -->
     <div class="chart-card">
@@ -974,6 +1096,16 @@ function dashboardHTML() {
       </div>
       <canvas id="chart-weight" height="160"></canvas>
       <div class="hist-table-wrap" id="hist-table-wrap"></div>
+    </div>
+
+    <!-- ── Estimated 1-Rep Max ── -->
+    <div class="chart-card">
+      <div class="chart-header">
+        <div class="chart-title">Estimated 1-Rep Max</div>
+        <select class="chart-select" id="sel-1rm" onchange="update1RMChart()">${opts}</select>
+      </div>
+      <canvas id="chart-1rm" height="160"></canvas>
+      <div class="hist-table-wrap" id="hist-1rm-wrap"></div>
     </div>
 
     <!-- ── Sessions Per Week ── -->
@@ -987,7 +1119,7 @@ function dashboardHTML() {
     <!-- ── Personal Records ── -->
     <div class="chart-card">
       <div class="chart-header">
-        <div class="chart-title">Personal Records</div>
+        <div class="chart-title">Personal Records & E1RM</div>
       </div>
       ${prTableHTML()}
     </div>
@@ -1011,11 +1143,12 @@ function prTableHTML() {
       const ex = S.bank[exId]; if (!ex) return null;
       const sessions = getExerciseHistory(exId);
       if (!sessions.length) return null;
-      const pr = getPR(exId);
+      const pr   = getPR(exId);
+      const e1rm = getBest1RM(exId);
       const first = parseFloat(sessions[0].exercises[exId]?.[0]?.weight)||0;
       const gain  = pr - first;
       const lastDate = sessions[sessions.length-1].date;
-      return { ex, pr, gain, lastDate, sessions: sessions.length };
+      return { ex, pr, e1rm, gain, lastDate, sessions: sessions.length };
     })
     .filter(Boolean)
     .sort((a,b) => b.pr - a.pr);
@@ -1023,10 +1156,11 @@ function prTableHTML() {
   if (!rows.length) return '<p style="font-size:13px;color:var(--muted);padding:12px 0">No data yet</p>';
 
   return `<div class="pr-table-wrap"><table class="pr-table">
-    <thead><tr><th>Exercise</th><th>PR Weight</th><th>Gain</th><th>Sessions</th><th>Last Logged</th></tr></thead>
+    <thead><tr><th>Exercise</th><th>PR Weight</th><th>E1RM</th><th>Gain</th><th>Sessions</th><th>Last Logged</th></tr></thead>
     <tbody>${rows.map(r => `<tr>
       <td>${r.ex.name}</td>
       <td class="mono">${r.pr} lb</td>
+      <td class="mono" style="color:var(--primary)">${r.e1rm} lb</td>
       <td class="mono ${r.gain>0?'pr-gain-pos':'pr-gain-neu'}">${r.gain>0?'+':''}${r.gain} lb</td>
       <td class="mono">${r.sessions}</td>
       <td>${formatDateShort(r.lastDate)}</td>
@@ -1090,6 +1224,7 @@ const CHART_OPTS = {
 function initCharts() {
   if (document.getElementById('chart-weight')) {
     updateWeightChart();
+    update1RMChart();
     buildFreqChart();
   }
 }
@@ -1110,6 +1245,46 @@ function updateWeightChart() {
   });
   const wrap = document.getElementById('hist-table-wrap');
   if (wrap) wrap.innerHTML = buildHistTable(sel.value, sessions);
+}
+
+function update1RMChart() {
+  const sel = document.getElementById('sel-1rm'); if (!sel) return;
+  const sessions = getExerciseHistory(sel.value);
+  const data = sessions.map(s => {
+    const entry = s.exercises[sel.value]?.[0];
+    return calc1RM(entry?.weight, entry?.reps);
+  });
+  if (charts.orm) charts.orm.destroy();
+  charts.orm = new Chart(document.getElementById('chart-1rm').getContext('2d'), {
+    type:'line',
+    data:{
+      labels: sessions.map(s => formatDateShort(s.date)),
+      datasets:[{ label:'E1RM', data, borderColor:'#f472b6', backgroundColor:'rgba(244,114,182,0.1)', fill:true, tension:0.3, pointBackgroundColor:'#f472b6', pointRadius:5, pointHoverRadius:7 }]
+    },
+    options:{ ...CHART_OPTS, plugins:{ ...CHART_OPTS.plugins, tooltip:{ ...CHART_OPTS.plugins.tooltip,
+      callbacks:{ label: ctx => ' '+ctx.parsed.y+' lb (estimated)' } } } }
+  });
+  // History table for 1RM
+  const wrap = document.getElementById('hist-1rm-wrap');
+  if (wrap) {
+    const pr = getPR(sel.value);
+    const tableRows = [...sessions].reverse().map(s => {
+      const entry = s.exercises[sel.value]?.[0];
+      const w = parseFloat(entry?.weight)||0;
+      const r = parseInt(entry?.reps)||0;
+      const e1rm = calc1RM(w, r);
+      const isPR = w > 0 && w >= pr;
+      return `<tr>
+        <td>${formatDate(s.date)}${isPR?'<span class="pr-tag" style="margin-left:6px">PR</span>':''}</td>
+        <td class="mono">${w} lb × ${r} reps</td>
+        <td class="mono" style="color:var(--dash)">${e1rm} lb</td>
+      </tr>`;
+    }).join('');
+    wrap.innerHTML = `<table class="hist-table">
+      <thead><tr><th>Date</th><th>Logged</th><th>E1RM</th></tr></thead>
+      <tbody>${tableRows}</tbody>
+    </table>`;
+  }
 }
 
 function buildFreqChart() {
@@ -1154,6 +1329,22 @@ document.getElementById('header-date').textContent =
 if ('serviceWorker' in navigator) {
   navigator.serviceWorker.register('./sw.js').catch(() => {});
 }
+
+// ── Theme ──────────────────────────────────────────────────────────────────
+function applyTheme(theme) {
+  document.documentElement.setAttribute('data-theme', theme);
+  const btn = document.getElementById('theme-toggle');
+  if (btn) btn.textContent = theme === 'light' ? '☀️' : '🌙';
+}
+function toggleTheme() {
+  const current = document.documentElement.getAttribute('data-theme') || 'dark';
+  const next = current === 'dark' ? 'light' : 'dark';
+  localStorage.setItem('liftlog_theme', next);
+  applyTheme(next);
+}
+
+// Load saved theme before render to avoid flash
+applyTheme(localStorage.getItem('liftlog_theme') || 'dark');
 
 loadState();
 render();
