@@ -189,6 +189,11 @@
     .bank-select { width: 100%; background: var(--bg); border: 1px solid var(--border); border-radius: var(--r-sm); padding: 7px 10px; color: var(--muted-light); font-size: 13px; cursor: pointer; margin-bottom: 8px; }
     .bank-select:focus { outline: none; border-color: var(--primary); }
     .bank-footer { padding: 10px 18px; padding-bottom: max(10px, env(safe-area-inset-bottom)); border-top: 1px solid var(--border); background: var(--card); flex-shrink: 0; }
+    .swap-picker { padding: 10px 18px; padding-bottom: max(10px, env(safe-area-inset-bottom)); border-top: 1px solid var(--border); background: var(--card); flex-shrink: 0; display: none; }
+    .swap-picker-title { font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.6px; color: var(--muted); margin-bottom: 8px; }
+    .swap-picker-list { display: flex; flex-direction: column; gap: 6px; }
+    .swap-pick-item { display: flex; align-items: center; justify-content: space-between; padding: 10px 12px; background: var(--elevated); border: 1px solid var(--border); border-radius: var(--r-sm); cursor: pointer; font-size: 13px; font-weight: 500; transition: all 0.15s; }
+    .swap-pick-item:hover { border-color: var(--primary); color: var(--primary); background: var(--primary-dim); }
     .bank-add-card { grid-column: 1/-1; background: var(--elevated); border: 1px dashed var(--border); border-radius: var(--r-sm); padding: 12px; }
     .bank-add-card-title { font-size: 10px; text-transform: uppercase; letter-spacing: 0.6px; color: var(--muted); margin-bottom: 8px; font-weight: 600; }
     .bank-item-delete { position: absolute; top: 6px; right: 6px; width: 18px; height: 18px; display: flex; align-items: center; justify-content: center; border-radius: 3px; background: transparent; border: none; color: var(--muted); cursor: pointer; opacity: 0; transition: all 0.15s; }
@@ -359,9 +364,16 @@
     <div class="bank-grid" id="bank-grid"></div>
     <div class="bank-footer" id="bank-footer" style="display:none">
       <div style="display:flex;gap:8px">
-        <button class="btn btn-primary" style="flex:1;justify-content:center" id="bank-add-btn" onclick="confirmBankSelection('add')"></button>
-        <button class="btn btn-ghost" style="flex:1;justify-content:center" id="bank-swap-btn" onclick="confirmBankSelection('swap')" style="display:none"></button>
+        <button class="btn btn-primary" style="flex:1;justify-content:center" id="bank-add-btn" onclick="confirmBankSelection()"></button>
+        <button class="btn btn-ghost" style="flex:1;justify-content:center" id="bank-swap-btn" onclick="showSwapPicker()"></button>
       </div>
+    </div>
+    <div class="swap-picker" id="swap-picker">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">
+        <div class="swap-picker-title">Swap out which exercise?</div>
+        <button class="close-btn" style="font-size:14px" onclick="hideSwapPicker()">✕</button>
+      </div>
+      <div class="swap-picker-list" id="swap-picker-list"></div>
     </div>
   </div>
 </div>
@@ -1016,6 +1028,7 @@ function openBankModal(targetId, day) {
 }
 function closeBankModal() {
   document.getElementById('bank-modal').classList.remove('open');
+  document.getElementById('swap-picker').style.display = 'none';
 }
 
 // Keep bank modal above keyboard on iOS
@@ -1114,27 +1127,56 @@ function selectExercise(exId) {
   footer.style.display = 'block';
 }
 
-function confirmBankSelection(action) {
+function confirmBankSelection() {
   const exId = BM.selectedId;
   const day  = BM.targetDay;
   if (!exId || !day) return;
-
-  if (action === 'swap' || BM.targetId) {
-    // If triggered from swap icon on a card, BM.targetId is already set
-    // If triggered from footer swap button without a target, pick the first exercise in the day that isn't this one
-    let swapTarget = BM.targetId;
-    if (!swapTarget) {
-      swapTarget = S.split[day].find(id => id !== exId) || null;
-    }
-    if (!swapTarget) { showToast('No exercise to swap', 'error'); return; }
-    const idx = S.split[day].indexOf(swapTarget);
+  if (BM.targetId) {
+    // Came from swap icon on a card — swap directly
+    const idx = S.split[day].indexOf(BM.targetId);
     if (idx !== -1) {
       S.split[day][idx] = exId;
-      if (S.session[day][swapTarget]) { S.session[day][exId] = S.session[day][swapTarget]; delete S.session[day][swapTarget]; }
+      if (S.session[day][BM.targetId]) { S.session[day][exId] = S.session[day][BM.targetId]; delete S.session[day][BM.targetId]; }
     }
   } else {
     if (S.split[day].includes(exId)) { showToast('Already in this day', 'error'); return; }
     S.split[day].push(exId);
+  }
+  save(); closeBankModal(); render();
+  if (WK.day) renderWorkoutCards();
+}
+
+function showSwapPicker() {
+  const day = BM.targetDay;
+  const exId = BM.selectedId;
+  if (!day || !exId) return;
+  const list = document.getElementById('swap-picker-list');
+  const exercises = S.split[day].filter(id => id !== exId);
+  if (!exercises.length) { showToast('No exercises to swap with', 'error'); return; }
+  list.innerHTML = exercises.map(id => {
+    const ex = S.bank[id];
+    return `<div class="swap-pick-item" onclick="doSwap('${id}')">
+      <span>${ex?.name || id}</span>
+      <span style="font-size:11px;color:var(--muted)">${ex?.muscleGroup || ''}</span>
+    </div>`;
+  }).join('');
+  document.getElementById('bank-footer').style.display = 'none';
+  document.getElementById('swap-picker').style.display = 'block';
+}
+
+function hideSwapPicker() {
+  document.getElementById('swap-picker').style.display = 'none';
+  document.getElementById('bank-footer').style.display = 'block';
+}
+
+function doSwap(swapOutId) {
+  const exId = BM.selectedId;
+  const day  = BM.targetDay;
+  if (!exId || !day) return;
+  const idx = S.split[day].indexOf(swapOutId);
+  if (idx !== -1) {
+    S.split[day][idx] = exId;
+    if (S.session[day][swapOutId]) { S.session[day][exId] = S.session[day][swapOutId]; delete S.session[day][swapOutId]; }
   }
   save(); closeBankModal(); render();
   if (WK.day) renderWorkoutCards();
