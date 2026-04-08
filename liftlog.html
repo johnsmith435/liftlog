@@ -966,8 +966,9 @@ function sessionBodyHTML(session, editing=false) {
 
     if (editing) {
       return `
-        <div class="session-ex-row">
+        <div class="session-ex-row" data-exid="${exId}">
           <div class="session-ex-header">
+            <div class="drag-handle" style="margin-right:6px">${svg(ICO.drag,14)}</div>
             <div class="session-ex-name">${ex?ex.name:exId}</div>
             <div style="display:flex;gap:5px">
               <button class="btn-save-date" onclick="openSessionBankModal('${session.id}','${exId}')">Swap</button>
@@ -1038,7 +1039,31 @@ function startSessionEdit(id) {
   editingSessions[id] = true;
   const body = document.getElementById(`sbody-${id}`);
   const s = S.history.find(h => h.id===id);
-  if (body && s) body.innerHTML = sessionBodyHTML(s, true);
+  if (body && s) {
+    body.innerHTML = sessionBodyHTML(s, true);
+    initSessionSortable(id, s);
+  }
+}
+
+function initSessionSortable(sessionId, session) {
+  const container = document.getElementById(`sbody-${sessionId}`);
+  if (!container) return;
+  Sortable.create(container, {
+    animation: 140,
+    handle: '.drag-handle',
+    ghostClass: 'sortable-ghost',
+    filter: '.session-footer',
+    onEnd() {
+      // Rebuild exercises object in new order
+      const newOrder = [...container.querySelectorAll('.session-ex-row[data-exid]')]
+        .map(el => el.dataset.exid);
+      const reordered = {};
+      newOrder.forEach(id => { if (session.exercises[id]) reordered[id] = session.exercises[id]; });
+      // Keep any remaining (shouldn't be any, but safety)
+      Object.keys(session.exercises).forEach(id => { if (!reordered[id]) reordered[id] = session.exercises[id]; });
+      session.exercises = reordered;
+    }
+  });
 }
 
 function cancelSessionEdit(id) {
@@ -1046,6 +1071,15 @@ function cancelSessionEdit(id) {
   const body = document.getElementById(`sbody-${id}`);
   const s = S.history.find(h => h.id===id);
   if (body && s) body.innerHTML = sessionBodyHTML(s, false);
+}
+
+function refreshSessionEditBody(sessionId) {
+  const s = S.history.find(h => h.id===sessionId); if (!s) return;
+  const body = document.getElementById(`sbody-${sessionId}`);
+  if (body) {
+    body.innerHTML = sessionBodyHTML(s, true);
+    initSessionSortable(sessionId, s);
+  }
 }
 
 function updateSessionEntry(sessionId, exId) {
@@ -1070,8 +1104,7 @@ function changeSessionSets(sessionId, exId, delta) {
 function removeSessionExercise(sessionId, exId) {
   const s = S.history.find(h => h.id===sessionId); if (!s) return;
   delete s.exercises[exId];
-  const body = document.getElementById(`sbody-${sessionId}`);
-  if (body) body.innerHTML = sessionBodyHTML(s, true);
+  refreshSessionEditBody(sessionId);
 }
 
 function saveSessionEdits(id) {
@@ -1185,7 +1218,7 @@ function renderBankGrid() {
       ? `<button class="bank-item-delete" onclick="event.stopPropagation();deleteExercise('${ex.id}')" title="Delete">${svg(ICO.close,10)}</button>`
       : '';
     return `
-      <div class="bank-item ${isSel?'selected':inDay?'in-day':''}" onclick="selectExercise('${ex.id}')">
+      <div class="bank-item ${isSel?'selected':inDay?'in-day':''}" data-exid="${ex.id}" onclick="selectExercise('${ex.id}')">
         <div class="bank-item-name">${ex.name}</div>
         <div class="bank-mg">${MG_LABELS[ex.muscleGroup]||ex.muscleGroup||''}</div>
         ${extLnk}${delBtn}
@@ -1230,7 +1263,7 @@ function selectExercise(exId) {
   BM.selectedId = exId;
   // Update visual selection
   document.querySelectorAll('#bank-grid .bank-item').forEach(el => {
-    el.classList.toggle('selected', el.getAttribute('onclick')?.includes(`'${exId}'`));
+    el.classList.toggle('selected', el.dataset.exid === exId);
   });
   const footer   = document.getElementById('bank-footer');
   const addBtn   = document.getElementById('bank-add-btn');
@@ -1255,7 +1288,6 @@ function confirmBankSelection() {
   if (BM.sessionId) {
     const s = S.history.find(h => h.id === BM.sessionId); if (!s) return;
     if (BM.targetId) {
-      // Swap: replace targetId with new exercise, carry over sets
       const existing = s.exercises[BM.targetId];
       s.exercises[exId] = existing || [{ weight: '', reps: '' }];
       delete s.exercises[BM.targetId];
@@ -1263,9 +1295,9 @@ function confirmBankSelection() {
       if (s.exercises[exId]) { showToast('Already in this session', 'error'); return; }
       s.exercises[exId] = [{ weight: '', reps: '' }];
     }
+    const sid = BM.sessionId;
     closeBankModal();
-    const body = document.getElementById(`sbody-${BM.sessionId}`);
-    if (body) body.innerHTML = sessionBodyHTML(s, true);
+    refreshSessionEditBody(sid);
     return;
   }
 
@@ -1321,9 +1353,9 @@ function doSwap(swapOutId) {
     const s = S.history.find(h => h.id === BM.sessionId); if (!s) return;
     s.exercises[exId] = s.exercises[swapOutId] || [{ weight: '', reps: '' }];
     delete s.exercises[swapOutId];
+    const sid = BM.sessionId;
     closeBankModal();
-    const body = document.getElementById(`sbody-${BM.sessionId}`);
-    if (body) body.innerHTML = sessionBodyHTML(s, true);
+    refreshSessionEditBody(sid);
     return;
   }
 
