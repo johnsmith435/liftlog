@@ -228,6 +228,47 @@
     .toast.error   { border-color: rgba(248,113,113,0.4); color: var(--danger); }
     .sortable-ghost { opacity: 0.25; }
 
+    /* ── Active Workout Overlay ── */
+    .workout-overlay { position: fixed; inset: 0; background: var(--bg); z-index: 200; display: flex; flex-direction: column; overflow: hidden; }
+    .workout-overlay-header { display: flex; align-items: center; justify-content: space-between; padding: max(18px, env(safe-area-inset-top)) 20px 14px; border-bottom: 1px solid var(--border); background: var(--bg); flex-shrink: 0; gap: 10px; }
+    html.pwa .workout-overlay-header { padding-top: max(20px, env(safe-area-inset-top)); }
+    .workout-timer { font-size: 22px; font-weight: 700; font-family: 'SF Mono','Fira Code',ui-monospace,monospace; color: var(--primary); letter-spacing: 1px; }
+    .workout-title { font-size: 15px; font-weight: 600; flex: 1; text-align: center; }
+    .workout-scroll { flex: 1; overflow-y: auto; padding: 16px 16px 120px; }
+    .workout-footer { position: absolute; bottom: 0; left: 0; right: 0; padding: 12px 16px; padding-bottom: max(12px, env(safe-area-inset-bottom)); background: var(--bg); border-top: 1px solid var(--border); display: flex; gap: 8px; }
+
+    /* Workout exercise card */
+    .wk-card { background: var(--card); border: 1px solid var(--border); border-radius: var(--r); overflow: hidden; margin-bottom: 10px; transition: all 0.2s; }
+    .wk-card.done { opacity: 0.5; }
+    .wk-card.done .wk-card-header { background: rgba(74,222,128,0.06); }
+    .wk-card-header { display: flex; align-items: center; gap: 10px; padding: 11px 14px; border-bottom: 1px solid var(--border); }
+    .wk-done-btn { width: 26px; height: 26px; border-radius: 50%; border: 2px solid var(--border); background: transparent; cursor: pointer; display: flex; align-items: center; justify-content: center; color: transparent; flex-shrink: 0; transition: all 0.15s; }
+    .wk-done-btn.checked { border-color: var(--success); background: var(--success); color: #fff; }
+    .wk-card-name { flex: 1; font-size: 14px; font-weight: 600; }
+    .wk-card-body { padding: 12px 14px; }
+    .wk-prev { padding: 6px 14px; background: rgba(255,255,255,0.02); border-bottom: 1px solid var(--border); font-size: 11px; color: var(--muted-light); }
+    .wk-suggest { padding: 6px 14px; border-bottom: 1px solid var(--border); font-size: 11px; color: var(--orange); background: rgba(251,146,60,0.06); display: flex; align-items: center; gap: 5px; }
+
+    /* ── Workout Summary Modal ── */
+    .summary-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.75); z-index: 400; display: flex; align-items: flex-end; justify-content: center; opacity: 0; pointer-events: none; transition: opacity 0.2s; }
+    .summary-overlay.open { opacity: 1; pointer-events: auto; }
+    .summary-modal { background: var(--card); border: 1px solid var(--border); border-radius: var(--r) var(--r) 0 0; width: 100%; max-width: 620px; max-height: 85vh; display: flex; flex-direction: column; transform: translateY(100%); transition: transform 0.28s cubic-bezier(0.16,1,0.3,1); }
+    .summary-overlay.open .summary-modal { transform: translateY(0); }
+    .summary-header { display: flex; align-items: center; justify-content: space-between; padding: 15px 18px; border-bottom: 1px solid var(--border); flex-shrink: 0; }
+    .summary-body { overflow-y: auto; padding: 16px 18px; padding-bottom: max(16px, env(safe-area-inset-bottom)); flex: 1; }
+    .summary-section { margin-bottom: 20px; }
+    .summary-section-title { font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.7px; color: var(--muted); margin-bottom: 10px; }
+    .summary-ex-row { padding: 10px 12px; background: var(--elevated); border: 1px solid var(--border); border-radius: var(--r-sm); margin-bottom: 6px; }
+    .summary-ex-name { font-size: 13px; font-weight: 600; margin-bottom: 4px; display: flex; align-items: center; gap: 6px; }
+    .summary-ex-stats { font-size: 12px; color: var(--muted-light); font-family: 'SF Mono','Fira Code',ui-monospace,monospace; }
+    .summary-ex-insight { font-size: 11px; color: var(--orange); margin-top: 4px; }
+    .pr-badge { background: rgba(251,146,60,0.15); color: var(--orange); font-size: 10px; font-weight: 700; padding: 1px 6px; border-radius: 4px; }
+    .up-badge { background: rgba(74,222,128,0.12); color: var(--success); font-size: 10px; font-weight: 700; padding: 1px 6px; border-radius: 4px; }
+    .summary-stat-row { display: flex; gap: 8px; margin-bottom: 12px; flex-wrap: wrap; }
+    .summary-stat { flex: 1; min-width: 80px; background: var(--elevated); border: 1px solid var(--border); border-radius: var(--r-sm); padding: 10px 12px; text-align: center; }
+    .summary-stat-val { font-size: 22px; font-weight: 700; color: var(--primary); }
+    .summary-stat-lbl { font-size: 10px; text-transform: uppercase; letter-spacing: 0.5px; color: var(--muted); margin-top: 2px; }
+
     /* Light theme overrides */
     html[data-theme="light"] {
       --bg: #f5f5f5; --card: #ffffff; --elevated: #ececec;
@@ -309,6 +350,31 @@
 </div>
 
 <div class="toast" id="toast"></div>
+
+<!-- Active Workout Overlay -->
+<div class="workout-overlay" id="workout-overlay" style="display:none">
+  <div class="workout-overlay-header">
+    <button class="btn btn-ghost" style="padding:6px 12px;font-size:12px" onclick="cancelWorkout()">✕ Cancel</button>
+    <div class="workout-title" id="wk-title"></div>
+    <div class="workout-timer" id="wk-timer">0:00</div>
+  </div>
+  <div class="workout-scroll" id="wk-scroll"></div>
+  <div class="workout-footer">
+    <button class="btn btn-ghost" style="flex:0 0 auto" onclick="openBankModal(null, WK.day)">+ Add</button>
+    <button class="btn btn-primary" style="flex:1" onclick="finishWorkout()">Finish &amp; Log</button>
+  </div>
+</div>
+
+<!-- Workout Summary Modal -->
+<div class="summary-overlay" id="summary-overlay">
+  <div class="summary-modal">
+    <div class="summary-header">
+      <div class="modal-title">Workout Summary</div>
+      <button class="close-btn" onclick="closeSummary()">×</button>
+    </div>
+    <div class="summary-body" id="summary-body"></div>
+  </div>
+</div>
 
 <script>
 // ═══════════════════════════════════════════════════════
@@ -645,7 +711,8 @@ function dayHTML(day) {
     </div>
     <div class="exercises-list" id="list-${day}">${cards}</div>
     <div class="workout-actions">
-      <button class="btn btn-primary" onclick="logWorkout('${day}')">${svg(ICO.check)} Log Workout</button>
+      <button class="btn btn-primary" onclick="startWorkout('${day}')" style="flex:1">${svg(ICO.check)} Start Workout</button>
+      <button class="btn btn-ghost"   onclick="logWorkout('${day}')">Quick Log</button>
       <button class="btn btn-ghost"   onclick="clearDay('${day}')">Clear</button>
     </div>
     ${sessionHistoryHTML(day, daySessions)}`;
@@ -1311,6 +1378,274 @@ function buildFreqChart() {
     options:{ ...CHART_OPTS, scales:{ ...CHART_OPTS.scales, y:{ ...CHART_OPTS.scales.y, ticks:{ ...CHART_OPTS.scales.y.ticks, stepSize:1 } } },
       plugins:{ ...CHART_OPTS.plugins, tooltip:{ ...CHART_OPTS.plugins.tooltip, callbacks:{ label: ctx => ' '+ctx.parsed.y+' session'+(ctx.parsed.y!==1?'s':'') } } } }
   });
+}
+
+// ═══════════════════════════════════════════════════════
+// ACTIVE WORKOUT
+// ═══════════════════════════════════════════════════════
+let WK = { day: null, startTime: null, timerInterval: null, done: {} };
+
+function startWorkout(day) {
+  WK.day = day;
+  WK.startTime = Date.now();
+  WK.done = {};
+  // Seed session entries with defaults if empty
+  S.split[day].forEach(id => {
+    if (!S.session[day][id]) S.session[day][id] = getDefaultEntry(id, day);
+  });
+  const LABEL = { push:'Push Day', pull:'Pull Day', legs:'Leg Day', arms:'Arms Day' };
+  document.getElementById('wk-title').textContent = LABEL[day];
+  document.getElementById('workout-overlay').style.display = 'flex';
+  renderWorkoutCards();
+  clearInterval(WK.timerInterval);
+  WK.timerInterval = setInterval(tickTimer, 1000);
+  // Make bank modal add to workout
+  BM.targetDay = day;
+}
+
+function tickTimer() {
+  const elapsed = Math.floor((Date.now() - WK.startTime) / 1000);
+  const m = Math.floor(elapsed / 60), s = elapsed % 60;
+  const el = document.getElementById('wk-timer');
+  if (el) el.textContent = `${m}:${s.toString().padStart(2,'0')}`;
+}
+
+function cancelWorkout() {
+  if (!confirm('Cancel this workout? Your exercise data will not be lost.')) return;
+  clearInterval(WK.timerInterval);
+  document.getElementById('workout-overlay').style.display = 'none';
+  WK = { day: null, startTime: null, timerInterval: null, done: {} };
+}
+
+function renderWorkoutCards() {
+  const day = WK.day;
+  const last = getLastSession(day);
+  const cards = S.split[day].map(id => workoutCardHTML(id, day, last)).join('');
+  document.getElementById('wk-scroll').innerHTML = cards || '<div class="empty-state">No exercises — tap + Add</div>';
+}
+
+function shouldSuggestWeightUp(exId) {
+  const hist = getExerciseHistory(exId);
+  if (hist.length < 3) return null;
+  const recent = hist.slice(-3);
+  const weights = recent.map(s => parseFloat(s.exercises[exId]?.[0]?.weight)||0);
+  const reps    = recent.map(s => parseInt(s.exercises[exId]?.[0]?.reps)||0);
+  const allSame = weights.every(w => w === weights[0]) && weights[0] > 0;
+  const allGoodReps = reps.every(r => r >= 8);
+  if (allSame && allGoodReps) return weights[0];
+  return null;
+}
+
+function workoutCardHTML(exId, day, lastSession) {
+  const ex = S.bank[exId]; if (!ex) return '';
+  if (!S.session[day][exId]) S.session[day][exId] = getDefaultEntry(exId, day);
+  const { weight, reps, sets } = S.session[day][exId];
+  const isDone = !!WK.done[exId];
+
+  const prevSets = lastSession?.exercises?.[exId] || [];
+  const prevHTML = prevSets.length
+    ? `<div class="wk-prev">Last: ${prevSets.length} × ${prevSets[0]?.weight}lb × ${prevSets[0]?.reps} reps · ${formatDateShort(lastSession.date)}</div>`
+    : '';
+
+  const suggestW = shouldSuggestWeightUp(exId);
+  const suggestHTML = suggestW && !isDone
+    ? `<div class="wk-suggest">⬆ Consider moving up from ${suggestW}lb — you've hit 3 sessions at ≥8 reps</div>`
+    : '';
+
+  const caliLink = ex.caliUrl
+    ? `<a class="cali-link" href="${ex.caliUrl}" target="_blank" rel="noopener" onclick="event.stopPropagation()">${svg(ICO.ext,9)}</a>`
+    : '';
+
+  return `
+    <div class="wk-card ${isDone?'done':''}" data-id="${exId}">
+      <div class="wk-card-header">
+        <button class="wk-done-btn ${isDone?'checked':''}" onclick="toggleWkDone('${exId}')" title="Mark complete">
+          ${isDone ? svg(ICO.check, 11) : ''}
+        </button>
+        <div class="wk-card-name">${ex.name}${caliLink}</div>
+        <div class="card-actions">
+          <button class="icon-btn swap"   onclick="openBankModal('${exId}','${day}')"  title="Swap">${svg(ICO.swap)}</button>
+          <button class="icon-btn danger" onclick="removeFromWorkout('${exId}')" title="Remove">${svg(ICO.close)}</button>
+        </div>
+      </div>
+      ${prevHTML}${suggestHTML}
+      <div class="wk-card-body">
+        <div class="set-control-row">
+          <div class="set-field">
+            <div class="set-field-label">Weight (lbs)</div>
+            <input class="set-input" type="number" min="0" step="2.5" inputmode="decimal"
+              placeholder="0" value="${weight}"
+              onchange="updateEntry('${exId}','${day}','weight',this.value)">
+          </div>
+          <div class="set-field">
+            <div class="set-field-label">Reps</div>
+            <input class="set-input" type="number" min="1" step="1" inputmode="numeric"
+              placeholder="0" value="${reps}"
+              onchange="updateEntry('${exId}','${day}','reps',this.value)">
+          </div>
+          <div class="sets-counter">
+            <div class="sets-counter-label">Sets</div>
+            <div class="sets-counter-control">
+              <button class="sets-counter-btn" onclick="wkChangeSetCount('${exId}','${day}',-1)">−</button>
+              <div class="sets-counter-val" id="wk-sets-${exId}">${sets}</div>
+              <button class="sets-counter-btn" onclick="wkChangeSetCount('${exId}','${day}',+1)">+</button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>`;
+}
+
+function toggleWkDone(exId) {
+  WK.done[exId] = !WK.done[exId];
+  // Update just this card in place
+  const card = document.querySelector(`#wk-scroll .wk-card[data-id="${exId}"]`);
+  if (card) {
+    card.classList.toggle('done', WK.done[exId]);
+    const btn = card.querySelector('.wk-done-btn');
+    if (btn) { btn.classList.toggle('checked', WK.done[exId]); btn.innerHTML = WK.done[exId] ? svg(ICO.check,11) : ''; }
+    const suggest = card.querySelector('.wk-suggest');
+    if (suggest && WK.done[exId]) suggest.style.display = 'none';
+  }
+}
+
+function wkChangeSetCount(exId, day, delta) {
+  if (!S.session[day][exId]) S.session[day][exId] = getDefaultEntry(exId, day);
+  const current = parseInt(S.session[day][exId].sets)||1;
+  const next = Math.max(1, Math.min(20, current + delta));
+  S.session[day][exId].sets = next;
+  save();
+  const el = document.getElementById(`wk-sets-${exId}`);
+  if (el) el.textContent = next;
+}
+
+function removeFromWorkout(exId) {
+  const day = WK.day;
+  S.split[day] = S.split[day].filter(id => id !== exId);
+  delete S.session[day][exId];
+  delete WK.done[exId];
+  save();
+  renderWorkoutCards();
+}
+
+function finishWorkout() {
+  const day = WK.day;
+  const elapsed = Math.floor((Date.now() - WK.startTime) / 1000);
+  clearInterval(WK.timerInterval);
+
+  // Build logged exercises (all non-empty, not just "done")
+  const logged = {};
+  S.split[day].forEach(exId => {
+    const entry = S.session[day][exId];
+    if (!entry || (entry.weight === '' && entry.reps === '')) return;
+    const sets = [];
+    const n = parseInt(entry.sets)||1;
+    for (let i = 0; i < n; i++) sets.push({ weight: entry.weight, reps: entry.reps });
+    logged[exId] = sets;
+  });
+
+  if (!Object.keys(logged).length) { showToast('Enter weight/reps before finishing','error'); clearInterval(WK.timerInterval); WK.timerInterval = setInterval(tickTimer,1000); return; }
+
+  // Save to history
+  S.history.push({ id: Date.now().toString(), day, date: today(), exercises: logged });
+  const justLoggedId = S.history[S.history.length - 1].id;
+  S.session[day] = {};
+  save();
+
+  // Hide workout overlay
+  document.getElementById('workout-overlay').style.display = 'none';
+  WK = { day: null, startTime: null, timerInterval: null, done: {} };
+
+  // Show summary
+  showWorkoutSummary(justLoggedId, elapsed);
+  render();
+}
+
+function showWorkoutSummary(histId, elapsedSecs) {
+  const session = S.history.find(h => h.id === histId);
+  if (!session) return;
+
+  const m = Math.floor(elapsedSecs / 60), s = elapsedSecs % 60;
+  const durationStr = elapsedSecs ? `${m}:${s.toString().padStart(2,'0')}` : '—';
+  const exIds = Object.keys(session.exercises);
+
+  // Top stats
+  const totalSets = exIds.reduce((acc, id) => acc + (session.exercises[id]?.length||0), 0);
+  const totalReps = exIds.reduce((acc, id) => {
+    const sets = session.exercises[id]||[];
+    return acc + sets.reduce((a, s) => a + (parseInt(s.reps)||0), 0);
+  }, 0);
+  const prs = exIds.filter(id => {
+    const w = parseFloat(session.exercises[id]?.[0]?.weight)||0;
+    const allPrev = S.history.filter(h => h.id !== histId);
+    const prevMax = allPrev.reduce((max, h) => {
+      const pw = parseFloat(h.exercises[id]?.[0]?.weight)||0;
+      return pw > max ? pw : max;
+    }, 0);
+    return w > 0 && w > prevMax;
+  });
+
+  const statsHTML = `
+    <div class="summary-stat-row">
+      <div class="summary-stat"><div class="summary-stat-val">${durationStr}</div><div class="summary-stat-lbl">Duration</div></div>
+      <div class="summary-stat"><div class="summary-stat-val">${exIds.length}</div><div class="summary-stat-lbl">Exercises</div></div>
+      <div class="summary-stat"><div class="summary-stat-val">${totalSets}</div><div class="summary-stat-lbl">Total Sets</div></div>
+      <div class="summary-stat"><div class="summary-stat-val">${totalReps}</div><div class="summary-stat-lbl">Total Reps</div></div>
+    </div>`;
+
+  // Per-exercise breakdown
+  const exRows = exIds.map(exId => {
+    const ex = S.bank[exId];
+    const sets = session.exercises[exId]||[];
+    const w = parseFloat(sets[0]?.weight)||0;
+    const r = parseInt(sets[0]?.reps)||0;
+    const n = sets.length;
+    const e1rm = calc1RM(w, r);
+    const isPR = prs.includes(exId);
+
+    // Previous best for comparison
+    const prevSessions = getExerciseHistory(exId).filter(h => h.id !== histId);
+    const prevBest = prevSessions.length ? parseFloat(prevSessions[prevSessions.length-1].exercises[exId]?.[0]?.weight)||0 : 0;
+    const delta = w && prevBest ? w - prevBest : 0;
+
+    // Weight-up suggestion
+    const suggestW = shouldSuggestWeightUp(exId);
+    const suggestHTML = suggestW
+      ? `<div class="summary-ex-insight">⬆ Consider moving up from ${suggestW}lb next session</div>`
+      : '';
+
+    const badges = [
+      isPR ? '<span class="pr-badge">PR</span>' : '',
+      delta > 0 ? `<span class="up-badge">+${delta}lb</span>` : '',
+    ].filter(Boolean).join(' ');
+
+    return `
+      <div class="summary-ex-row">
+        <div class="summary-ex-name">${ex?.name||exId} ${badges}</div>
+        <div class="summary-ex-stats">${n} sets × ${w}lb × ${r} reps${e1rm ? ' · E1RM: '+e1rm+'lb' : ''}</div>
+        ${suggestHTML}
+      </div>`;
+  }).join('');
+
+  document.getElementById('summary-body').innerHTML = `
+    ${statsHTML}
+    <div class="summary-section">
+      <div class="summary-section-title">Exercise Breakdown</div>
+      ${exRows}
+    </div>`;
+
+  document.getElementById('summary-overlay').classList.add('open');
+}
+
+function closeSummary() {
+  document.getElementById('summary-overlay').classList.remove('open');
+}
+
+// Re-render workout cards when bank modal adds/swaps an exercise during an active workout
+const _origSelectExercise = selectExercise;
+function selectExercise(exId) {
+  _origSelectExercise(exId);
+  if (WK.day) renderWorkoutCards();
 }
 
 // ── Toast ──────────────────────────────────────────────────────────────────
