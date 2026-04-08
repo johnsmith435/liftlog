@@ -952,33 +952,136 @@ function sessionRowHTML(session) {
     </div>`;
 }
 
-function sessionBodyHTML(session) {
+let editingSessions = {};
+
+function sessionBodyHTML(session, editing=false) {
   const rows = Object.keys(session.exercises).map(exId => {
-    const ex    = S.bank[exId];
-    const sets  = session.exercises[exId]||[];
-    const pr    = getPR(exId);
-    const w     = parseFloat(sets[0]?.weight)||0;
-    const r     = parseInt(sets[0]?.reps)||0;
-    const isPR  = w > 0 && w >= pr;
+    const ex   = S.bank[exId];
+    const sets = session.exercises[exId]||[];
+    const pr   = getPR(exId);
+    const w    = parseFloat(sets[0]?.weight)||0;
+    const r    = parseInt(sets[0]?.reps)||0;
+    const n    = sets.length;
+    const isPR = w > 0 && w >= pr;
+
+    if (editing) {
+      return `
+        <div class="session-ex-row">
+          <div class="session-ex-header">
+            <div class="session-ex-name">${ex?ex.name:exId}</div>
+            <button class="btn-danger-sm" onclick="removeSessionExercise('${session.id}','${exId}')">Remove</button>
+          </div>
+          <div class="set-control-row" style="margin-top:8px">
+            <div class="set-field">
+              <div class="set-field-label">Weight (lbs)</div>
+              <input class="set-input" type="number" inputmode="decimal" value="${w}" id="sedit-w-${session.id}-${exId}"
+                style="font-size:14px" onchange="updateSessionEntry('${session.id}','${exId}')">
+            </div>
+            <div class="set-field">
+              <div class="set-field-label">Reps</div>
+              <input class="set-input" type="number" inputmode="numeric" value="${r}" id="sedit-r-${session.id}-${exId}"
+                style="font-size:14px" onchange="updateSessionEntry('${session.id}','${exId}')">
+            </div>
+            <div class="sets-counter">
+              <div class="sets-counter-label">Sets</div>
+              <div class="sets-counter-control">
+                <button class="sets-counter-btn" onclick="changeSessionSets('${session.id}','${exId}',-1)">−</button>
+                <div class="sets-counter-val" id="sedit-n-${session.id}-${exId}">${n}</div>
+                <button class="sets-counter-btn" onclick="changeSessionSets('${session.id}','${exId}',+1)">+</button>
+              </div>
+            </div>
+          </div>
+        </div>`;
+    }
+
     return `
       <div class="session-ex-row">
         <div class="session-ex-header">
           <div class="session-ex-name">${ex?ex.name:exId}${isPR?'<span class="pr-tag">PR</span>':''}</div>
-          <div class="session-ex-stats">${sets.length} × ${w}lb × ${r} reps</div>
+          <div class="session-ex-stats">${n} × ${w}lb × ${r} reps</div>
         </div>
       </div>`;
   }).join('');
-  return `${rows}<div class="session-footer">
-    <div class="session-date-edit">
-      <span style="font-size:11px;color:var(--muted)">Date:</span>
-      <input class="date-input-inline" type="date" id="date-edit-${session.id}" value="${session.date}">
-      <button class="btn-save-date" onclick="saveSessionDate('${session.id}')">Save</button>
-    </div>
-    <div style="display:flex;gap:6px;align-items:center">
-      <button class="btn-save-date" onclick="viewSessionSummary('${session.id}')">Summary</button>
-      <button class="btn-danger-sm" onclick="deleteSession('${session.id}')">Delete</button>
-    </div>
-  </div>`;
+
+  const footer = editing ? `
+    <div class="session-footer">
+      <div class="session-date-edit">
+        <span style="font-size:11px;color:var(--muted)">Date:</span>
+        <input class="date-input-inline" type="date" id="date-edit-${session.id}" value="${session.date}">
+      </div>
+      <div style="display:flex;gap:6px;align-items:center">
+        <button class="btn-save-date" onclick="saveSessionEdits('${session.id}')">Save</button>
+        <button class="btn-danger-sm" onclick="cancelSessionEdit('${session.id}')">Cancel</button>
+      </div>
+    </div>` : `
+    <div class="session-footer">
+      <div class="session-date-edit">
+        <span style="font-size:11px;color:var(--muted)">Date:</span>
+        <input class="date-input-inline" type="date" id="date-edit-${session.id}" value="${session.date}">
+        <button class="btn-save-date" onclick="saveSessionDate('${session.id}')">Save</button>
+      </div>
+      <div style="display:flex;gap:6px;align-items:center">
+        <button class="btn-save-date" onclick="startSessionEdit('${session.id}')">Edit</button>
+        <button class="btn-save-date" onclick="viewSessionSummary('${session.id}')">Summary</button>
+        <button class="btn-danger-sm" onclick="deleteSession('${session.id}')">Delete</button>
+      </div>
+    </div>`;
+
+  return rows + footer;
+}
+
+function startSessionEdit(id) {
+  editingSessions[id] = true;
+  const body = document.getElementById(`sbody-${id}`);
+  const s = S.history.find(h => h.id===id);
+  if (body && s) body.innerHTML = sessionBodyHTML(s, true);
+}
+
+function cancelSessionEdit(id) {
+  editingSessions[id] = false;
+  const body = document.getElementById(`sbody-${id}`);
+  const s = S.history.find(h => h.id===id);
+  if (body && s) body.innerHTML = sessionBodyHTML(s, false);
+}
+
+function updateSessionEntry(sessionId, exId) {
+  const s = S.history.find(h => h.id===sessionId); if (!s) return;
+  const w = parseFloat(document.getElementById(`sedit-w-${sessionId}-${exId}`)?.value)||0;
+  const r = parseInt(document.getElementById(`sedit-r-${sessionId}-${exId}`)?.value)||0;
+  const n = parseInt(document.getElementById(`sedit-n-${sessionId}-${exId}`)?.textContent)||1;
+  const sets = [];
+  for (let i=0; i<n; i++) sets.push({ weight: w, reps: r });
+  s.exercises[exId] = sets;
+}
+
+function changeSessionSets(sessionId, exId, delta) {
+  const s = S.history.find(h => h.id===sessionId); if (!s) return;
+  const el = document.getElementById(`sedit-n-${sessionId}-${exId}`); if (!el) return;
+  const current = parseInt(el.textContent)||1;
+  const next = Math.max(1, Math.min(20, current+delta));
+  el.textContent = next;
+  updateSessionEntry(sessionId, exId);
+}
+
+function removeSessionExercise(sessionId, exId) {
+  const s = S.history.find(h => h.id===sessionId); if (!s) return;
+  delete s.exercises[exId];
+  const body = document.getElementById(`sbody-${sessionId}`);
+  if (body) body.innerHTML = sessionBodyHTML(s, true);
+}
+
+function saveSessionEdits(id) {
+  const s = S.history.find(h => h.id===id); if (!s) return;
+  // Also save date
+  const dateInput = document.getElementById(`date-edit-${id}`);
+  if (dateInput?.value) s.date = dateInput.value;
+  // Flush all inputs before saving (in case onchange didn't fire on mobile)
+  Object.keys(s.exercises).forEach(exId => updateSessionEntry(id, exId));
+  editingSessions[id] = false;
+  save();
+  const body = document.getElementById(`sbody-${id}`);
+  if (body) body.innerHTML = sessionBodyHTML(s, false);
+  showToast('Session updated', 'success');
 }
 
 function toggleSession(id) {
@@ -989,7 +1092,7 @@ function toggleSession(id) {
   row.classList.toggle('open', openSessions[id]);
   if (openSessions[id]) {
     const s = S.history.find(h => h.id===id);
-    if (s) body.innerHTML = sessionBodyHTML(s);
+    if (s) body.innerHTML = sessionBodyHTML(s, !!editingSessions[id]);
     // Scroll the expanded card into view after content renders
     setTimeout(() => row.scrollIntoView({ behavior: 'smooth', block: 'start' }), 50);
   }
