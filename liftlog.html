@@ -1324,8 +1324,10 @@ function selectExercise(exId) {
   } else if (BM.targetDay) {
     swappable = (S.split[BM.targetDay] || []).filter(id => id !== exId);
   }
-  swapBtn.textContent = `⇄ Swap`;
-  swapBtn.style.display = swappable.length > 0 ? '' : 'none';
+  if (swapBtn) {
+    swapBtn.textContent = `⇄ Swap`;
+    swapBtn.style.display = swappable.length > 0 ? '' : 'none';
+  }
   footer.style.display = 'block';
 }
 
