@@ -160,6 +160,8 @@
     .modal-overlay.open { opacity: 1; pointer-events: auto; }
     .modal { background: var(--card); border: 1px solid var(--border); border-radius: var(--r) var(--r) 0 0; width: 100%; max-width: 620px; max-height: 82vh; display: flex; flex-direction: column; transform: translateY(100%); transition: transform 0.28s cubic-bezier(0.16,1,0.3,1); }
     .modal-overlay.open .modal { transform: translateY(0); }
+    .modal-overlay.keyboard-up { align-items: flex-start; padding-top: 0; }
+    .modal-overlay.keyboard-up .modal { border-radius: 0; max-height: 100%; }
     .modal-header { display: flex; align-items: center; justify-content: space-between; padding: 15px 18px; border-bottom: 1px solid var(--border); flex-shrink: 0; }
     .modal-title { font-size: 15px; font-weight: 600; }
     .close-btn { width: 30px; height: 30px; display: flex; align-items: center; justify-content: center; border-radius: var(--r-sm); border: none; background: var(--elevated); color: var(--muted-light); cursor: pointer; font-size: 18px; line-height: 1; }
@@ -1012,7 +1014,24 @@ function openBankModal(targetId, day) {
   renderBankFilters(); renderBankGrid();
   document.getElementById('bank-modal').classList.add('open');
 }
-function closeBankModal() { document.getElementById('bank-modal').classList.remove('open'); }
+function closeBankModal() {
+  document.getElementById('bank-modal').classList.remove('open');
+  document.getElementById('bank-modal').classList.remove('keyboard-up');
+}
+
+// Keep bank modal above keyboard on iOS
+if (window.visualViewport) {
+  window.visualViewport.addEventListener('resize', () => {
+    const modal = document.getElementById('bank-modal');
+    if (!modal.classList.contains('open')) return;
+    const vvh = window.visualViewport.height;
+    const wh  = window.innerHeight;
+    const keyboardUp = wh - vvh > 100;
+    modal.classList.toggle('keyboard-up', keyboardUp);
+    const inner = modal.querySelector('.modal');
+    if (inner) inner.style.maxHeight = keyboardUp ? vvh + 'px' : '';
+  });
+}
 function handleModalBackdrop(e) { if(e.target.classList.contains('modal-overlay')) closeBankModal(); }
 
 function renderBankFilters() {
