@@ -1311,7 +1311,16 @@ function deleteExercise(exId) {
 }
 
 function selectExercise(exId) {
-  // Close desc of any OTHER exercise (keep current exercise's desc if open)
+  // Tap again on already-selected pill → deselect
+  if (BM.selectedId === exId) {
+    BM.selectedId = null;
+    document.querySelectorAll('#bank-grid .bank-item').forEach(el => el.classList.remove('selected'));
+    const footer = document.getElementById('bank-footer');
+    if (footer) footer.style.display = 'none';
+    return;
+  }
+
+  // Close desc of any OTHER exercise
   if (BM.openDescId && BM.openDescId !== exId) closeBankDesc();
 
   BM.selectedId = exId;
