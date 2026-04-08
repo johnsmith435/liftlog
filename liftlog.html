@@ -1699,8 +1699,7 @@ function renderSummaryBody() {
     </div>` : `
     <button class="health-import-btn" onclick="importHealthData('${histId}')">
       ${heartSVG} Import Apple Watch Data
-    </button>
-    <div style="font-size:11px;color:var(--muted);text-align:center;margin-top:-10px;margin-bottom:16px">iCloud Drive → Shortcuts → health-export.json</div>`;
+    </button>`;
 
   // Per-exercise breakdown
   const exRows = exIds.map(exId => {
@@ -1767,11 +1766,11 @@ function importHealthData(histId) {
         const activeCal  = pick('activecalories','activeenergy','activeenergyburned');
         const totalCal   = pick('totalcalories','totalenergy','totalenergyburned');
         const avgHR      = pick('avgheartrate','averageheartrate','heartrateaverage','averagehr');
-        const peakHR     = pick('peakheartrate','maxheartrate','maximumheartrate','peakhr','maximumhr');
+        const peakHR     = pick('peakheartrate','maxheartrate','maximumheartrate','peakhr','maximumhr','maxhr');
         const startTime  = pick('starttime','startdate','start');
 
-        // Show raw keys if nothing matched, so we can diagnose
-        if (!activeCal && !avgHR) {
+        // Use != null so 0 values still pass
+        if (activeCal == null && avgHR == null) {
           const keys = Object.keys(h).join(', ');
           showToast(`Keys found: ${keys || 'none'} — check format`, 'error');
           return;
