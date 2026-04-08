@@ -1215,8 +1215,8 @@ function renderBankGrid() {
   const isCustom = ex => !DEFAULT_BANK[ex.id];
 
   const items = exs.map(ex => {
-    const isSel = ex.id===BM.targetId;
-    const inDay = split.includes(ex.id)&&!isSel;
+    const isSel = ex.id===BM.selectedId;
+    const inDay = (split.includes(ex.id)||ex.id===BM.targetId)&&!isSel;
     const delBtn = isCustom(ex)
       ? `<button class="bank-item-delete" onclick="event.stopPropagation();deleteExercise('${ex.id}')" title="Delete">${svg(ICO.close,10)}</button>`
       : '';
@@ -1224,7 +1224,7 @@ function renderBankGrid() {
       ? `<button class="bank-item-info${isCustom(ex)?'':' solo'}" onclick="event.stopPropagation();toggleBankDesc('${ex.id}')" title="About">${svg(ICO.info,11)}</button>`
       : '';
     const descPanel = ex.desc
-      ? `<div class="bank-item-desc" id="bdesc-${ex.id}" onclick="event.stopPropagation()">${ex.desc}${ex.caliUrl?`<br><a class="desc-src" href="${ex.caliUrl}" target="_blank" rel="noopener">View on Calistree ↗</a>`:''}</div>`
+      ? `<div class="bank-item-desc" id="bdesc-${ex.id}" onclick="closeBankDesc();event.stopPropagation()">${ex.desc}${ex.caliUrl?`<br><a class="desc-src" href="${ex.caliUrl}" target="_blank" rel="noopener" onclick="event.stopPropagation()">View on Calistree ↗</a>`:''}</div>`
       : '';
     return `
       <div class="bank-item ${isSel?'selected':inDay?'in-day':''}" data-exid="${ex.id}" onclick="selectExercise('${ex.id}')">
@@ -1266,6 +1266,8 @@ function closeBankDesc() {
 }
 
 function toggleBankDesc(exId) {
+  // Always select this exercise when its info is tapped
+  if (BM.selectedId !== exId) selectExercise(exId);
   if (BM.openDescId === exId) { closeBankDesc(); return; }
   closeBankDesc();
   const panel = document.getElementById(`bdesc-${exId}`);
@@ -1290,17 +1292,8 @@ function deleteExercise(exId) {
 }
 
 function selectExercise(exId) {
-  // Close any open desc panel first
-  closeBankDesc();
-
-  // If tapping the already-selected item, deselect and hide footer
-  if (BM.selectedId === exId) {
-    BM.selectedId = null;
-    document.querySelectorAll('#bank-grid .bank-item').forEach(el => el.classList.remove('selected'));
-    const footer = document.getElementById('bank-footer');
-    if (footer) footer.style.display = 'none';
-    return;
-  }
+  // Close desc of any OTHER exercise (keep current exercise's desc if open)
+  if (BM.openDescId && BM.openDescId !== exId) closeBankDesc();
 
   BM.selectedId = exId;
 
