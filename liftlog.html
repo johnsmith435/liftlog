@@ -561,7 +561,7 @@ let S = {
   history: [], // [{id,day,date,exercises:{exId:[{weight,reps}...]}}]
 };
 
-let BM = { targetId:null, targetDay:null, filter:'all', selectedId:null, sessionId:null };
+let BM = { targetId:null, targetDay:null, filter:'all', selectedId:null, sessionId:null, openDescId:null };
 let charts = {};
 let openSessions = {};
 let openDescs = {};
@@ -1162,7 +1162,7 @@ function toggleShowAll(day) { showAllHistory[day]=!showAllHistory[day]; render()
 
 // ── Bank modal ─────────────────────────────────────────────────────────────
 function openSessionBankModal(sessionId, swapOutId) {
-  BM.sessionId=sessionId; BM.targetId=swapOutId||null; BM.targetDay=null; BM.filter='all'; BM.selectedId=null;
+  BM.sessionId=sessionId; BM.targetId=swapOutId||null; BM.targetDay=null; BM.filter='all'; BM.selectedId=null; BM.openDescId=null;
   document.getElementById('modal-title').textContent = swapOutId ? 'Swap Exercise' : 'Add Exercise';
   document.getElementById('bank-search').value = '';
   const footer = document.getElementById('bank-footer');
@@ -1175,7 +1175,7 @@ function openSessionBankModal(sessionId, swapOutId) {
 }
 
 function openBankModal(targetId, day) {
-  BM.sessionId=null; BM.targetId=targetId; BM.targetDay=day; BM.filter='all'; BM.selectedId=null;
+  BM.sessionId=null; BM.targetId=targetId; BM.targetDay=day; BM.filter='all'; BM.selectedId=null; BM.openDescId=null;
   document.getElementById('modal-title').textContent = targetId ? 'Swap Exercise' : 'Add Exercise';
   document.getElementById('bank-search').value = '';
   const footer = document.getElementById('bank-footer');
@@ -1199,7 +1199,7 @@ function renderBankFilters() {
     `<button class="filter-pill ${k===BM.filter?'active':''}" onclick="setBankFilter('${k}')">${MG_LABELS[k]}</button>`
   ).join('');
 }
-function setBankFilter(cat) { BM.filter=cat; renderBankFilters(); renderBankGrid(); }
+function setBankFilter(cat) { BM.filter=cat; BM.openDescId=null; renderBankFilters(); renderBankGrid(); }
 
 function renderBankGrid() {
   const query = (document.getElementById('bank-search')?.value||'').toLowerCase().trim();
@@ -1256,13 +1256,24 @@ function renderBankGrid() {
   document.getElementById('bank-grid').innerHTML = (items || `<div class="bank-empty">No exercises found</div>`) + addCard;
 }
 
+function closeBankDesc() {
+  if (!BM.openDescId) return;
+  const panel = document.getElementById(`bdesc-${BM.openDescId}`);
+  if (panel) panel.classList.remove('open');
+  const item = panel?.closest?.('.bank-item');
+  if (item) { const btn = item.querySelector('.bank-item-info'); if (btn) btn.style.color = ''; }
+  BM.openDescId = null;
+}
+
 function toggleBankDesc(exId) {
+  if (BM.openDescId === exId) { closeBankDesc(); return; }
+  closeBankDesc();
   const panel = document.getElementById(`bdesc-${exId}`);
   if (!panel) return;
-  const isOpen = panel.classList.toggle('open');
-  // Also toggle info button active state
+  panel.classList.add('open');
   const btn = panel.closest('.bank-item')?.querySelector('.bank-item-info');
-  if (btn) btn.style.color = isOpen ? 'var(--primary)' : '';
+  if (btn) btn.style.color = 'var(--primary)';
+  BM.openDescId = exId;
 }
 
 function deleteExercise(exId) {
@@ -1279,10 +1290,12 @@ function deleteExercise(exId) {
 }
 
 function selectExercise(exId) {
+  closeBankDesc();
   BM.selectedId = exId;
-  // Update visual selection
+  // Update visual selection — use data-exid for exact match
   document.querySelectorAll('#bank-grid .bank-item').forEach(el => {
-    el.classList.toggle('selected', el.dataset.exid === exId);
+    el.classList.remove('selected');
+    if (el.dataset.exid === exId) el.classList.add('selected');
   });
   const footer   = document.getElementById('bank-footer');
   const addBtn   = document.getElementById('bank-add-btn');
