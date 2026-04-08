@@ -177,9 +177,8 @@
     .filter-pill.active { background: var(--primary-dim); border-color: var(--primary); color: var(--primary); }
     .bank-grid { padding: 14px 18px; display: grid; grid-template-columns: repeat(auto-fill,minmax(160px,1fr)); gap: 6px; overflow-y: auto; flex: 1; }
     .bank-item { padding: 9px 12px; border-radius: var(--r-sm); border: 1px solid var(--border); background: var(--elevated); cursor: pointer; transition: all 0.15s; font-size: 12px; font-weight: 500; position: relative; }
-    .bank-item:hover { border-color: var(--primary); color: var(--primary); background: var(--primary-dim); }
+    @media (hover: hover) { .bank-item:hover { border-color: var(--primary); color: var(--primary); background: var(--primary-dim); } }
     .bank-item.selected { border-color: var(--primary); color: var(--primary); background: var(--primary-dim); }
-    .bank-item.deselected { border-color: var(--border) !important; color: var(--text) !important; background: var(--elevated) !important; }
     .bank-item.in-day { border-color: var(--border-hover); color: var(--muted-light); }
     .bank-item-name { padding-right: 20px; }
     .bank-mg { font-size: 10px; color: var(--muted); margin-top: 2px; text-transform: capitalize; }
@@ -1315,11 +1314,7 @@ function selectExercise(exId) {
   // Tap again on already-selected pill → deselect
   if (BM.selectedId === exId) {
     BM.selectedId = null;
-    document.querySelectorAll('#bank-grid .bank-item').forEach(el => {
-      el.classList.remove('selected');
-      el.classList.add('deselected');
-      setTimeout(() => el.classList.remove('deselected'), 300);
-    });
+    document.querySelectorAll('#bank-grid .bank-item').forEach(el => el.classList.remove('selected'));
     const footer = document.getElementById('bank-footer');
     if (footer) footer.style.display = 'none';
     return;
