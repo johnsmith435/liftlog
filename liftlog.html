@@ -358,7 +358,10 @@
     <div class="bank-filter-row" id="bank-filters"></div>
     <div class="bank-grid" id="bank-grid"></div>
     <div class="bank-footer" id="bank-footer" style="display:none">
-      <button class="btn btn-primary" style="width:100%;justify-content:center" id="bank-confirm-btn" onclick="confirmBankSelection()"></button>
+      <div style="display:flex;gap:8px">
+        <button class="btn btn-primary" style="flex:1;justify-content:center" id="bank-add-btn" onclick="confirmBankSelection('add')"></button>
+        <button class="btn btn-ghost" style="flex:1;justify-content:center" id="bank-swap-btn" onclick="confirmBankSelection('swap')" style="display:none"></button>
+      </div>
     </div>
   </div>
 </div>
@@ -1006,6 +1009,8 @@ function openBankModal(targetId, day) {
   document.getElementById('bank-search').value = '';
   const footer = document.getElementById('bank-footer');
   if (footer) footer.style.display = 'none';
+  const swapBtn = document.getElementById('bank-swap-btn');
+  if (swapBtn) swapBtn.style.display = 'none';
   renderBankFilters(); renderBankGrid();
   document.getElementById('bank-modal').classList.add('open');
 }
@@ -1089,32 +1094,43 @@ function deleteExercise(exId) {
 }
 
 function selectExercise(exId) {
-  // Just highlight — confirmation happens via confirmBankSelection
   BM.selectedId = exId;
   // Update visual selection
   document.querySelectorAll('#bank-grid .bank-item').forEach(el => {
     el.classList.toggle('selected', el.getAttribute('onclick')?.includes(`'${exId}'`));
   });
-  // Show confirm footer
-  const footer = document.getElementById('bank-footer');
-  const btn    = document.getElementById('bank-confirm-btn');
-  const ex     = S.bank[exId];
-  if (footer && btn && ex) {
-    const label = BM.targetId ? `Swap for ${ex.name}` : `Add ${ex.name}`;
-    btn.textContent = label;
-    footer.style.display = 'block';
-  }
+  const footer   = document.getElementById('bank-footer');
+  const addBtn   = document.getElementById('bank-add-btn');
+  const swapBtn  = document.getElementById('bank-swap-btn');
+  const ex = S.bank[exId];
+  if (!footer || !ex) return;
+  const inDay = S.split[BM.targetDay]?.includes(exId);
+  // Always show Add button (even if already in day — will show toast)
+  addBtn.textContent = `+ Add ${ex.name}`;
+  // Show swap button if there are exercises already in the day to swap with
+  const hasExercises = S.split[BM.targetDay]?.length > 0;
+  swapBtn.textContent = `⇄ Swap`;
+  swapBtn.style.display = hasExercises ? '' : 'none';
+  footer.style.display = 'block';
 }
 
-function confirmBankSelection() {
+function confirmBankSelection(action) {
   const exId = BM.selectedId;
   const day  = BM.targetDay;
   if (!exId || !day) return;
-  if (BM.targetId) {
-    const idx = S.split[day].indexOf(BM.targetId);
+
+  if (action === 'swap' || BM.targetId) {
+    // If triggered from swap icon on a card, BM.targetId is already set
+    // If triggered from footer swap button without a target, pick the first exercise in the day that isn't this one
+    let swapTarget = BM.targetId;
+    if (!swapTarget) {
+      swapTarget = S.split[day].find(id => id !== exId) || null;
+    }
+    if (!swapTarget) { showToast('No exercise to swap', 'error'); return; }
+    const idx = S.split[day].indexOf(swapTarget);
     if (idx !== -1) {
       S.split[day][idx] = exId;
-      if (S.session[day][BM.targetId]) { S.session[day][exId] = S.session[day][BM.targetId]; delete S.session[day][BM.targetId]; }
+      if (S.session[day][swapTarget]) { S.session[day][exId] = S.session[day][swapTarget]; delete S.session[day][swapTarget]; }
     }
   } else {
     if (S.split[day].includes(exId)) { showToast('Already in this day', 'error'); return; }
