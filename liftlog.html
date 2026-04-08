@@ -1709,34 +1709,35 @@ function renderSummaryBody() {
           <div class="health-stat-lbl">Resting Cal</div>
         </div>` : ''}
       </div>
-      ${health.hrTimeline?.length > 1 ? `
-      <div style="margin-top:12px">
-        <div style="font-size:10px;text-transform:uppercase;letter-spacing:0.5px;color:var(--muted);margin-bottom:6px">Heart Rate Throughout Workout</div>
-        <canvas id="hr-chart-${histId}" height="80"></canvas>
-      </div>` : ''}
+    </div>` : `
+    <button class="health-import-btn" onclick="importHealthData('${histId}')">
+      ${heartSVG} Import Apple Watch Data
+    </button>`;
+
+  // HR timeline chart (shown separately below health card, when data exists)
+  const hrChartHTML = (health?.hrTimeline?.length > 1) ? `
+    <div class="health-card" style="margin-bottom:16px">
+      <div class="health-card-header" style="margin-bottom:8px">
+        <div class="health-card-title">${heartSVG} Heart Rate Timeline</div>
+      </div>
+      <canvas id="hr-chart-${histId}" height="90"></canvas>
     </div>
     <script>
       (function() {
         const canvas = document.getElementById('hr-chart-${histId}');
         if (!canvas) return;
-        const data = ${JSON.stringify(health.hrTimeline || [])};
-        if (!data.length) return;
+        const data = ${JSON.stringify(health.hrTimeline)};
+        const mins = ${JSON.stringify(health.workoutMinutes || 0)};
         new Chart(canvas.getContext('2d'), {
           type: 'line',
           data: {
-            labels: data.map((_, i) => {
-              const mins = Math.round(i * (${JSON.stringify(health.workoutMinutes || 0)}) / (data.length - 1));
-              return mins + 'm';
-            }),
-            datasets: [{ data, borderColor: '#f87171', backgroundColor: 'rgba(248,113,113,0.1)', fill: true, tension: 0.4, pointRadius: 0, borderWidth: 2 }]
+            labels: data.map((_, i) => mins ? Math.round(i * mins / (data.length-1)) + 'm' : i),
+            datasets: [{ data, borderColor: '#f87171', backgroundColor: 'rgba(248,113,113,0.12)', fill: true, tension: 0.4, pointRadius: 0, borderWidth: 2 }]
           },
-          options: { responsive: true, plugins: { legend: { display: false }, tooltip: { callbacks: { label: c => c.parsed.y + ' bpm' } } }, scales: { x: { grid: { color: 'rgba(255,255,255,0.05)' }, ticks: { color: '#4b5563', maxTicksLimit: 6 } }, y: { grid: { color: 'rgba(255,255,255,0.05)' }, ticks: { color: '#4b5563' } } } }
+          options: { responsive: true, plugins: { legend: { display: false }, tooltip: { callbacks: { label: c => c.parsed.y + ' bpm' } } }, scales: { x: { grid: { color: 'rgba(255,255,255,0.05)' }, ticks: { color: '#4b5563', maxTicksLimit: 8 } }, y: { grid: { color: 'rgba(255,255,255,0.05)' }, ticks: { color: '#4b5563' } } } }
         });
       })();
-    <\/script>` : `
-    <button class="health-import-btn" onclick="importHealthData('${histId}')">
-      ${heartSVG} Import Apple Watch Data
-    </button>`;
+    <\/script>` : '';
 
   // Per-exercise breakdown
   const exRows = exIds.map(exId => {
@@ -1773,7 +1774,8 @@ function renderSummaryBody() {
   document.getElementById('summary-body').innerHTML = `
     ${statsHTML}
     ${healthHTML}
-    <div class="summary-section">
+    ${hrChartHTML}
+    <div class="summary-section" style="margin-top:20px">
       <div class="summary-section-title">Exercise Breakdown</div>
       ${exRows}
     </div>`;
