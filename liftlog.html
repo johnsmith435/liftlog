@@ -199,6 +199,12 @@
     .bank-item-delete { position: absolute; top: 6px; right: 6px; width: 18px; height: 18px; display: flex; align-items: center; justify-content: center; border-radius: 3px; background: transparent; border: none; color: var(--muted); cursor: pointer; opacity: 0; transition: all 0.15s; }
     .bank-item:hover .bank-item-delete { opacity: 1; }
     .bank-item-delete:hover { color: var(--danger); background: rgba(248,113,113,0.15); }
+    .bank-item-info { position: absolute; top: 6px; right: 28px; width: 18px; height: 18px; display: flex; align-items: center; justify-content: center; border-radius: 3px; background: transparent; border: none; color: var(--muted); cursor: pointer; opacity: 0; transition: all 0.15s; }
+    .bank-item:hover .bank-item-info { opacity: 1; }
+    .bank-item-info:hover { color: var(--primary); background: var(--primary-dim); }
+    .bank-item-info.solo { right: 6px; }
+    .bank-item-desc { display: none; margin-top: 7px; padding-top: 7px; border-top: 1px solid var(--border); font-size: 11px; color: var(--muted-light); line-height: 1.55; grid-column: 1/-1; }
+    .bank-item-desc.open { display: block; }
 
     /* Dashboard */
     .stats-grid { display: grid; grid-template-columns: repeat(3,1fr); gap: 10px; margin-bottom: 20px; }
@@ -1217,11 +1223,18 @@ function renderBankGrid() {
     const delBtn = isCustom(ex)
       ? `<button class="bank-item-delete" onclick="event.stopPropagation();deleteExercise('${ex.id}')" title="Delete">${svg(ICO.close,10)}</button>`
       : '';
+    const infoBtn = ex.desc
+      ? `<button class="bank-item-info${isCustom(ex)?'':' solo'}" onclick="event.stopPropagation();toggleBankDesc('${ex.id}')" title="About">${svg(ICO.info,11)}</button>`
+      : '';
+    const descPanel = ex.desc
+      ? `<div class="bank-item-desc" id="bdesc-${ex.id}">${ex.desc}${ex.caliUrl?`<br><a class="desc-src" href="${ex.caliUrl}" target="_blank" rel="noopener">View on Calistree ↗</a>`:''}</div>`
+      : '';
     return `
       <div class="bank-item ${isSel?'selected':inDay?'in-day':''}" data-exid="${ex.id}" onclick="selectExercise('${ex.id}')">
-        <div class="bank-item-name">${ex.name}</div>
+        <div class="bank-item-name" style="padding-right:${ex.desc?(isCustom(ex)?'40px':'22px'):'20px'}">${ex.name}</div>
         <div class="bank-mg">${MG_LABELS[ex.muscleGroup]||ex.muscleGroup||''}</div>
-        ${extLnk}${delBtn}
+        ${extLnk}${infoBtn}${delBtn}
+        ${descPanel}
       </div>`;
   }).join('');
 
@@ -1244,6 +1257,15 @@ function renderBankGrid() {
     </div>`;
 
   document.getElementById('bank-grid').innerHTML = (items || `<div class="bank-empty">No exercises found</div>`) + addCard;
+}
+
+function toggleBankDesc(exId) {
+  const panel = document.getElementById(`bdesc-${exId}`);
+  if (!panel) return;
+  const isOpen = panel.classList.toggle('open');
+  // Also toggle info button active state
+  const btn = panel.closest('.bank-item')?.querySelector('.bank-item-info');
+  if (btn) btn.style.color = isOpen ? 'var(--primary)' : '';
 }
 
 function deleteExercise(exId) {
