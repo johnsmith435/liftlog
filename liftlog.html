@@ -287,10 +287,6 @@
     .health-stat-lbl { font-size: 10px; text-transform: uppercase; letter-spacing: 0.5px; color: var(--muted-light); margin-top: 2px; }
     .health-import-btn { display: flex; align-items: center; gap: 7px; padding: 10px 16px; border-radius: var(--r-sm); border: 1px dashed rgba(248,113,113,0.4); background: transparent; color: var(--danger); font-size: 13px; font-weight: 600; cursor: pointer; width: 100%; justify-content: center; transition: all 0.15s; }
     .health-import-btn:hover { background: rgba(248,113,113,0.08); border-color: var(--danger); }
-    .health-btn-row { display: flex; gap: 8px; margin-bottom: 16px; }
-    .health-btn-row .health-import-btn { flex: 1; margin-bottom: 0; }
-    .health-scriptable-btn { display: flex; align-items: center; gap: 6px; padding: 10px 14px; border-radius: var(--r-sm); border: 1px solid rgba(248,113,113,0.3); background: rgba(248,113,113,0.06); color: var(--danger); font-size: 12px; font-weight: 600; cursor: pointer; text-decoration: none; white-space: nowrap; transition: all 0.15s; flex-shrink: 0; }
-    .health-scriptable-btn:hover { background: rgba(248,113,113,0.12); border-color: var(--danger); }
 
     /* Light theme overrides */
     html[data-theme="light"] {
@@ -1701,14 +1697,10 @@ function renderSummaryBody() {
         </div>
       </div>
     </div>` : `
-    <div class="health-btn-row">
-      <a class="health-scriptable-btn" href="scriptable:///run?scriptName=Export%20Workout" title="Run Scriptable export script">
-        ${heartSVG} Run Script
-      </a>
-      <button class="health-import-btn" onclick="importHealthData('${histId}')">
-        ${heartSVG} Import Apple Watch Data
-      </button>
-    </div>`;
+    <button class="health-import-btn" onclick="importHealthData('${histId}')">
+      ${heartSVG} Import Apple Watch Data
+    </button>
+    <div style="font-size:11px;color:var(--muted);text-align:center;margin-top:-10px;margin-bottom:16px">iCloud Drive → Shortcuts → health-export.json</div>`;
 
   // Per-exercise breakdown
   const exRows = exIds.map(exId => {
@@ -1753,29 +1745,51 @@ function renderSummaryBody() {
 
 function importHealthData(histId) {
   const input = document.createElement('input');
-  input.type = 'file'; input.accept = '.json';
+  input.type = 'file'; input.accept = '.json,.txt';
   input.onchange = e => {
     const file = e.target.files[0]; if (!file) return;
     const reader = new FileReader();
     reader.onload = ev => {
       try {
         const data = JSON.parse(ev.target.result);
-        // Accept either a wrapped object or raw fields
+        // Flatten — accept nested or flat
         const h = data.healthData || data;
-        if (!h.activeCalories && !h.avgHeartRate) { showToast('Unrecognized health file format','error'); return; }
+
+        // Case-insensitive key lookup so Shortcuts key naming doesn't matter
+        const flat = {};
+        Object.keys(h).forEach(k => { flat[k.toLowerCase().replace(/[_\s]/g,'')] = h[k]; });
+
+        const pick = (...keys) => {
+          for (const k of keys) { const v = flat[k.toLowerCase().replace(/[_\s]/g,'')]; if (v != null && v !== '') return v; }
+          return null;
+        };
+
+        const activeCal  = pick('activecalories','activeenergy','activeenergyburned');
+        const totalCal   = pick('totalcalories','totalenergy','totalenergyburned');
+        const avgHR      = pick('avgheartrate','averageheartrate','heartrateaverage','averagehr');
+        const peakHR     = pick('peakheartrate','maxheartrate','maximumheartrate','peakhr','maximumhr');
+        const startTime  = pick('starttime','startdate','start');
+
+        // Show raw keys if nothing matched, so we can diagnose
+        if (!activeCal && !avgHR) {
+          const keys = Object.keys(h).join(', ');
+          showToast(`Keys found: ${keys || 'none'} — check format`, 'error');
+          return;
+        }
+
         const session = S.history.find(s => s.id === histId);
         if (!session) return;
         session.healthData = {
-          activeCalories: Math.round(h.activeCalories ?? h.active_calories ?? null),
-          totalCalories:  Math.round(h.totalCalories  ?? h.total_calories  ?? null),
-          avgHeartRate:   Math.round(h.avgHeartRate   ?? h.avg_heart_rate  ?? null),
-          peakHeartRate:  Math.round(h.peakHeartRate  ?? h.peak_heart_rate ?? null),
-          startTime: h.startTime ?? h.start_time ?? null,
+          activeCalories: activeCal != null ? Math.round(activeCal) : null,
+          totalCalories:  totalCal  != null ? Math.round(totalCal)  : null,
+          avgHeartRate:   avgHR     != null ? Math.round(avgHR)     : null,
+          peakHeartRate:  peakHR    != null ? Math.round(peakHR)    : null,
+          startTime:      startTime ? String(startTime) : null,
         };
         save();
         renderSummaryBody();
-        showToast('Apple Watch data imported','success');
-      } catch { showToast('Could not read health file','error'); }
+        showToast('Apple Watch data imported', 'success');
+      } catch(err) { showToast('Could not parse file: ' + err.message, 'error'); }
     };
     reader.readAsText(file);
   };
