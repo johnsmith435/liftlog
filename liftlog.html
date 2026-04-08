@@ -156,7 +156,7 @@
     .empty-text { font-size: 14px; color: var(--muted-light); }
 
     /* Modal */
-    .modal-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.75); z-index: 100; display: flex; align-items: flex-end; justify-content: center; opacity: 0; pointer-events: none; transition: opacity 0.2s; }
+    .modal-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.75); z-index: 300; display: flex; align-items: flex-end; justify-content: center; opacity: 0; pointer-events: none; transition: opacity 0.2s; }
     .modal-overlay.open { opacity: 1; pointer-events: auto; }
     .modal { background: var(--card); border: 1px solid var(--border); border-radius: var(--r) var(--r) 0 0; width: 100%; max-width: 620px; max-height: 82vh; display: flex; flex-direction: column; transform: translateY(100%); transition: transform 0.28s cubic-bezier(0.16,1,0.3,1); }
     .modal-overlay.open .modal { transform: translateY(0); }
