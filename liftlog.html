@@ -1708,6 +1708,15 @@ function renderSummaryBody() {
           <div class="health-stat-val">${health.totalCalories - health.activeCalories}</div>
           <div class="health-stat-lbl">Resting Cal</div>
         </div>` : ''}
+        ${health.effort != null ? `<div class="health-stat" style="grid-column:1/-1;background:rgba(248,113,113,0.12);border-color:rgba(248,113,113,0.3)">
+          <div style="font-size:10px;text-transform:uppercase;letter-spacing:0.5px;color:var(--muted-light);margin-bottom:6px">Workout Effort</div>
+          <div style="display:flex;align-items:center;gap:8px">
+            <div class="health-stat-val" style="font-size:32px">${health.effort}<span style="font-size:14px;color:var(--muted-light)">/10</span></div>
+            <div style="flex:1;height:8px;background:var(--border);border-radius:4px;overflow:hidden">
+              <div style="height:100%;width:${health.effort * 10}%;background:linear-gradient(90deg,#4ade80,#fb923c,#f87171);border-radius:4px"></div>
+            </div>
+          </div>
+        </div>` : ''}
       </div>
     </div>` : `
     <button class="health-import-btn" onclick="importHealthData('${histId}')">
@@ -1817,21 +1826,23 @@ function importHealthData(histId) {
 
         const session = S.history.find(s => s.id === histId);
         if (!session) return;
-        const hrv       = pick('hrv','heartratevariability','heartratevariabilitysdnn','hrvsdnn');
+        const hrv        = pick('hrv','heartratevariability','heartratevariabilitysdnn','hrvsdnn');
         const workoutMins = pick('workoutminutes','durationminutes','duration');
+        const effort     = pick('effort','workouteffort','effortscore','perceivedeffort','rpe');
         // hrTimeline: accept array of numbers
         const rawTimeline = h.hrTimeline || h.hr_timeline || h.heartRateTimeline || h.heartrate_timeline || null;
         const hrTimeline = Array.isArray(rawTimeline) ? rawTimeline.map(Number).filter(n => !isNaN(n)) : null;
 
         session.healthData = {
-          activeCalories: activeCal  != null ? Math.round(activeCal)  : null,
-          totalCalories:  totalCal   != null ? Math.round(totalCal)   : null,
-          avgHeartRate:   avgHR      != null ? Math.round(avgHR)      : null,
-          peakHeartRate:  peakHR     != null ? Math.round(peakHR)     : null,
-          hrv:            hrv        != null ? Math.round(hrv)        : null,
-          workoutMinutes: workoutMins != null ? Math.round(workoutMins): null,
-          hrTimeline:     hrTimeline || null,
-          startTime:      startTime ? String(startTime) : null,
+          activeCalories: activeCal   != null ? Math.round(activeCal)   : null,
+          totalCalories:  totalCal    != null ? Math.round(totalCal)    : null,
+          avgHeartRate:   avgHR       != null ? Math.round(avgHR)       : null,
+          peakHeartRate:  peakHR      != null ? Math.round(peakHR)      : null,
+          hrv:            hrv         != null ? Math.round(hrv)         : null,
+          workoutMinutes: workoutMins  != null ? Math.round(workoutMins) : null,
+          effort:         effort       != null ? Math.round(effort)      : null,
+          hrTimeline:     hrTimeline  || null,
+          startTime:      startTime   ? String(startTime) : null,
         };
         save();
         renderSummaryBody();
