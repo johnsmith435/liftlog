@@ -248,6 +248,15 @@
     .wk-card-body { padding: 12px 14px; }
     .wk-prev { padding: 6px 14px; background: rgba(255,255,255,0.02); border-bottom: 1px solid var(--border); font-size: 11px; color: var(--muted-light); }
     .wk-suggest { padding: 6px 14px; border-bottom: 1px solid var(--border); font-size: 11px; color: var(--orange); background: rgba(251,146,60,0.06); display: flex; align-items: center; gap: 5px; }
+    .wk-card.done .set-input { opacity: 0.4; pointer-events: none; }
+    .wk-card.done .sets-counter-btn { opacity: 0.4; pointer-events: none; }
+
+    /* Timer card */
+    .wk-timer-card { background: var(--card); border: 1px solid var(--border); border-radius: var(--r); padding: 16px 18px; margin-bottom: 14px; display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+    .wk-timer-main { font-size: 48px; font-weight: 700; font-family: 'SF Mono','Fira Code',ui-monospace,monospace; color: var(--primary); letter-spacing: 2px; line-height: 1; }
+    .wk-timer-paused { font-size: 11px; text-transform: uppercase; letter-spacing: 0.7px; color: var(--danger); margin-top: 4px; }
+    .wk-insights { display: flex; flex-direction: column; gap: 6px; align-items: flex-end; }
+    .wk-insight-chip { background: var(--elevated); border: 1px solid var(--border); border-radius: var(--r-sm); padding: 5px 10px; font-size: 11px; color: var(--muted-light); text-align: right; font-family: 'SF Mono','Fira Code',ui-monospace,monospace; }
 
     /* ── Workout Summary Modal ── */
     .summary-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.75); z-index: 400; display: flex; align-items: flex-end; justify-content: center; opacity: 0; pointer-events: none; transition: opacity 0.2s; }
@@ -356,10 +365,7 @@
   <div class="workout-overlay-header">
     <button class="btn btn-ghost" style="padding:6px 12px;font-size:12px" onclick="cancelWorkout()">✕ Cancel</button>
     <div class="workout-title" id="wk-title"></div>
-    <div style="display:flex;align-items:center;gap:8px">
-      <button class="btn btn-ghost" style="padding:4px 10px;font-size:12px" id="wk-pause-btn" onclick="togglePauseWorkout()">⏸</button>
-      <div class="workout-timer" id="wk-timer">0:00</div>
-    </div>
+    <div style="width:72px"></div>
   </div>
   <div class="workout-scroll" id="wk-scroll"></div>
   <div class="workout-footer">
@@ -676,6 +682,8 @@ const ICO = {
   ext:   '<path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/>',
   info:  '<circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/>',
   chev:  '<polyline points="6 9 12 15 18 9"/>',
+  pause: '<rect x="6" y="4" width="4" height="16"/><rect x="14" y="4" width="4" height="16"/>',
+  play:  '<polygon points="5 3 19 12 5 21 5 3"/>',
 };
 
 // ═══════════════════════════════════════════════════════
@@ -1415,17 +1423,18 @@ function tickTimer() {
 }
 
 function togglePauseWorkout() {
-  const btn = document.getElementById('wk-pause-btn');
   if (WK.paused) {
-    // Resume
     WK.paused = false;
     WK.startTime = Date.now();
-    if (btn) btn.textContent = '⏸';
+    document.getElementById('wk-pause-icon')?.innerHTML && (document.getElementById('wk-pause-icon').innerHTML = svg(ICO.pause, 13));
+    document.getElementById('wk-pause-label') && (document.getElementById('wk-pause-label').textContent = 'Pause');
+    document.getElementById('wk-paused-label') && (document.getElementById('wk-paused-label').style.display = 'none');
   } else {
-    // Pause — bank elapsed time
     WK.pausedElapsed += Math.floor((Date.now() - WK.startTime) / 1000);
     WK.paused = true;
-    if (btn) btn.textContent = '▶';
+    document.getElementById('wk-pause-icon') && (document.getElementById('wk-pause-icon').innerHTML = svg(ICO.play, 13));
+    document.getElementById('wk-pause-label') && (document.getElementById('wk-pause-label').textContent = 'Resume');
+    document.getElementById('wk-paused-label') && (document.getElementById('wk-paused-label').style.display = 'block');
   }
 }
 
@@ -1440,7 +1449,29 @@ function renderWorkoutCards() {
   const day = WK.day;
   const last = getLastSession(day);
   const cards = S.split[day].map(id => workoutCardHTML(id, day, last)).join('');
-  document.getElementById('wk-scroll').innerHTML = cards || '<div class="empty-state">No exercises — tap + Add</div>';
+  document.getElementById('wk-scroll').innerHTML =
+    timerCardHTML() + (cards || '<div class="empty-state">No exercises — tap + Add</div>');
+}
+
+function timerCardHTML() {
+  const doneCount = Object.values(WK.done).filter(Boolean).length;
+  const total = S.split[WK.day]?.length || 0;
+  const pct = total ? Math.round((doneCount / total) * 100) : 0;
+  const dayStreak = getCurrentStreak();
+  return `
+    <div class="wk-timer-card" id="wk-timer-card">
+      <div>
+        <div class="wk-timer-main" id="wk-timer">0:00</div>
+        <div class="wk-timer-paused" id="wk-paused-label" style="display:none">Paused</div>
+      </div>
+      <div class="wk-insights">
+        <div class="wk-insight-chip" id="wk-progress-chip">${doneCount}/${total} done · ${pct}%</div>
+        <div class="wk-insight-chip">🔥 ${dayStreak} day streak</div>
+        <button class="btn btn-ghost" style="padding:5px 12px;font-size:12px;display:flex;align-items:center;gap:6px" id="wk-pause-btn" onclick="togglePauseWorkout()">
+          <span id="wk-pause-icon">${svg(ICO.pause, 13)}</span><span id="wk-pause-label">Pause</span>
+        </button>
+      </div>
+    </div>`;
 }
 
 function shouldSuggestWeightUp(exId) {
@@ -1517,7 +1548,6 @@ function workoutCardHTML(exId, day, lastSession) {
 
 function toggleWkDone(exId) {
   WK.done[exId] = !WK.done[exId];
-  // Update just this card in place
   const card = document.querySelector(`#wk-scroll .wk-card[data-id="${exId}"]`);
   if (card) {
     card.classList.toggle('done', WK.done[exId]);
@@ -1526,6 +1556,12 @@ function toggleWkDone(exId) {
     const suggest = card.querySelector('.wk-suggest');
     if (suggest && WK.done[exId]) suggest.style.display = 'none';
   }
+  // Update progress chip
+  const doneCount = Object.values(WK.done).filter(Boolean).length;
+  const total = S.split[WK.day]?.length || 0;
+  const pct = total ? Math.round((doneCount / total) * 100) : 0;
+  const chip = document.getElementById('wk-progress-chip');
+  if (chip) chip.textContent = `${doneCount}/${total} done · ${pct}%`;
 }
 
 function wkChangeSetCount(exId, day, delta) {
