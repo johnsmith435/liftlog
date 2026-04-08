@@ -356,7 +356,10 @@
   <div class="workout-overlay-header">
     <button class="btn btn-ghost" style="padding:6px 12px;font-size:12px" onclick="cancelWorkout()">✕ Cancel</button>
     <div class="workout-title" id="wk-title"></div>
-    <div class="workout-timer" id="wk-timer">0:00</div>
+    <div style="display:flex;align-items:center;gap:8px">
+      <button class="btn btn-ghost" style="padding:4px 10px;font-size:12px" id="wk-pause-btn" onclick="togglePauseWorkout()">⏸</button>
+      <div class="workout-timer" id="wk-timer">0:00</div>
+    </div>
   </div>
   <div class="workout-scroll" id="wk-scroll"></div>
   <div class="workout-footer">
@@ -1383,7 +1386,7 @@ function buildFreqChart() {
 // ═══════════════════════════════════════════════════════
 // ACTIVE WORKOUT
 // ═══════════════════════════════════════════════════════
-let WK = { day: null, startTime: null, timerInterval: null, done: {} };
+let WK = { day: null, startTime: null, timerInterval: null, done: {}, paused: false, pausedElapsed: 0 };
 
 function startWorkout(day) {
   WK.day = day;
@@ -1404,17 +1407,33 @@ function startWorkout(day) {
 }
 
 function tickTimer() {
-  const elapsed = Math.floor((Date.now() - WK.startTime) / 1000);
+  if (WK.paused) return;
+  const elapsed = WK.pausedElapsed + Math.floor((Date.now() - WK.startTime) / 1000);
   const m = Math.floor(elapsed / 60), s = elapsed % 60;
   const el = document.getElementById('wk-timer');
   if (el) el.textContent = `${m}:${s.toString().padStart(2,'0')}`;
+}
+
+function togglePauseWorkout() {
+  const btn = document.getElementById('wk-pause-btn');
+  if (WK.paused) {
+    // Resume
+    WK.paused = false;
+    WK.startTime = Date.now();
+    if (btn) btn.textContent = '⏸';
+  } else {
+    // Pause — bank elapsed time
+    WK.pausedElapsed += Math.floor((Date.now() - WK.startTime) / 1000);
+    WK.paused = true;
+    if (btn) btn.textContent = '▶';
+  }
 }
 
 function cancelWorkout() {
   if (!confirm('Cancel this workout? Your exercise data will not be lost.')) return;
   clearInterval(WK.timerInterval);
   document.getElementById('workout-overlay').style.display = 'none';
-  WK = { day: null, startTime: null, timerInterval: null, done: {} };
+  WK = { day: null, startTime: null, timerInterval: null, done: {}, paused: false, pausedElapsed: 0 };
 }
 
 function renderWorkoutCards() {
@@ -1530,12 +1549,13 @@ function removeFromWorkout(exId) {
 
 function finishWorkout() {
   const day = WK.day;
-  const elapsed = Math.floor((Date.now() - WK.startTime) / 1000);
+  const elapsed = WK.pausedElapsed + (WK.paused ? 0 : Math.floor((Date.now() - WK.startTime) / 1000));
   clearInterval(WK.timerInterval);
 
-  // Build logged exercises (all non-empty, not just "done")
+  // Only log exercises that were marked done
+  const doneIds = Object.keys(WK.done).filter(id => WK.done[id]);
   const logged = {};
-  S.split[day].forEach(exId => {
+  doneIds.forEach(exId => {
     const entry = S.session[day][exId];
     if (!entry || (entry.weight === '' && entry.reps === '')) return;
     const sets = [];
@@ -1554,7 +1574,7 @@ function finishWorkout() {
 
   // Hide workout overlay
   document.getElementById('workout-overlay').style.display = 'none';
-  WK = { day: null, startTime: null, timerInterval: null, done: {} };
+  WK = { day: null, startTime: null, timerInterval: null, done: {}, paused: false, pausedElapsed: 0 };
 
   // Show summary
   showWorkoutSummary(justLoggedId, elapsed);
