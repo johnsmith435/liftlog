@@ -277,6 +277,16 @@
     .summary-stat { flex: 1; min-width: 80px; background: var(--elevated); border: 1px solid var(--border); border-radius: var(--r-sm); padding: 10px 12px; text-align: center; }
     .summary-stat-val { font-size: 22px; font-weight: 700; color: var(--primary); }
     .summary-stat-lbl { font-size: 10px; text-transform: uppercase; letter-spacing: 0.5px; color: var(--muted); margin-top: 2px; }
+    .health-card { background: linear-gradient(135deg, rgba(248,113,113,0.08), rgba(251,146,60,0.08)); border: 1px solid rgba(248,113,113,0.25); border-radius: var(--r); padding: 14px 16px; margin-bottom: 16px; }
+    .health-card-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px; }
+    .health-card-title { font-size: 12px; font-weight: 600; color: var(--danger); text-transform: uppercase; letter-spacing: 0.6px; display: flex; align-items: center; gap: 6px; }
+    .health-stat-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 8px; }
+    .health-stat { background: rgba(0,0,0,0.15); border-radius: var(--r-sm); padding: 10px 12px; }
+    html[data-theme="light"] .health-stat { background: rgba(255,255,255,0.6); }
+    .health-stat-val { font-size: 24px; font-weight: 700; color: var(--danger); font-family: 'SF Mono','Fira Code',ui-monospace,monospace; }
+    .health-stat-lbl { font-size: 10px; text-transform: uppercase; letter-spacing: 0.5px; color: var(--muted-light); margin-top: 2px; }
+    .health-import-btn { display: flex; align-items: center; gap: 7px; padding: 10px 16px; border-radius: var(--r-sm); border: 1px dashed rgba(248,113,113,0.4); background: transparent; color: var(--danger); font-size: 13px; font-weight: 600; cursor: pointer; width: 100%; justify-content: center; transition: all 0.15s; margin-bottom: 16px; }
+    .health-import-btn:hover { background: rgba(248,113,113,0.08); border-color: var(--danger); }
 
     /* Light theme overrides */
     html[data-theme="light"] {
@@ -1615,19 +1625,32 @@ function finishWorkout() {
   render();
 }
 
+let _summaryHistId = null;
+let _summaryElapsed = 0;
+
 function showWorkoutSummary(histId, elapsedSecs) {
+  _summaryHistId = histId;
+  _summaryElapsed = elapsedSecs;
+  renderSummaryBody();
+  document.getElementById('summary-overlay').classList.add('open');
+}
+
+function renderSummaryBody() {
+  const histId = _summaryHistId;
+  const elapsedSecs = _summaryElapsed;
   const session = S.history.find(h => h.id === histId);
   if (!session) return;
 
   const m = Math.floor(elapsedSecs / 60), s = elapsedSecs % 60;
   const durationStr = elapsedSecs ? `${m}:${s.toString().padStart(2,'0')}` : '—';
   const exIds = Object.keys(session.exercises);
+  const health = session.healthData || null;
 
   // Top stats
   const totalSets = exIds.reduce((acc, id) => acc + (session.exercises[id]?.length||0), 0);
   const totalReps = exIds.reduce((acc, id) => {
     const sets = session.exercises[id]||[];
-    return acc + sets.reduce((a, s) => a + (parseInt(s.reps)||0), 0);
+    return acc + sets.reduce((a, sv) => a + (parseInt(sv.reps)||0), 0);
   }, 0);
   const prs = exIds.filter(id => {
     const w = parseFloat(session.exercises[id]?.[0]?.weight)||0;
@@ -1647,6 +1670,37 @@ function showWorkoutSummary(histId, elapsedSecs) {
       <div class="summary-stat"><div class="summary-stat-val">${totalReps}</div><div class="summary-stat-lbl">Total Reps</div></div>
     </div>`;
 
+  // Apple Health card
+  const heartSVG = `<svg width="14" height="14" viewBox="0 0 24 24" fill="var(--danger)" stroke="none"><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/></svg>`;
+  const healthHTML = health ? `
+    <div class="health-card">
+      <div class="health-card-header">
+        <div class="health-card-title">${heartSVG} Apple Watch</div>
+        <div style="font-size:10px;color:var(--muted)">${health.startTime ? health.startTime : ''}</div>
+      </div>
+      <div class="health-stat-grid">
+        <div class="health-stat">
+          <div class="health-stat-val">${health.activeCalories ?? '—'}</div>
+          <div class="health-stat-lbl">Active Cal</div>
+        </div>
+        <div class="health-stat">
+          <div class="health-stat-val">${health.totalCalories ?? '—'}</div>
+          <div class="health-stat-lbl">Total Cal</div>
+        </div>
+        <div class="health-stat">
+          <div class="health-stat-val">${health.avgHeartRate ?? '—'}</div>
+          <div class="health-stat-lbl">Avg HR</div>
+        </div>
+        <div class="health-stat">
+          <div class="health-stat-val">${health.peakHeartRate ?? '—'}</div>
+          <div class="health-stat-lbl">Peak HR</div>
+        </div>
+      </div>
+    </div>` : `
+    <button class="health-import-btn" onclick="importHealthData('${histId}')">
+      ${heartSVG} Import Apple Watch Data
+    </button>`;
+
   // Per-exercise breakdown
   const exRows = exIds.map(exId => {
     const ex = S.bank[exId];
@@ -1657,12 +1711,10 @@ function showWorkoutSummary(histId, elapsedSecs) {
     const e1rm = calc1RM(w, r);
     const isPR = prs.includes(exId);
 
-    // Previous best for comparison
     const prevSessions = getExerciseHistory(exId).filter(h => h.id !== histId);
     const prevBest = prevSessions.length ? parseFloat(prevSessions[prevSessions.length-1].exercises[exId]?.[0]?.weight)||0 : 0;
     const delta = w && prevBest ? w - prevBest : 0;
 
-    // Weight-up suggestion
     const suggestW = shouldSuggestWeightUp(exId);
     const suggestHTML = suggestW
       ? `<div class="summary-ex-insight">⬆ Consider moving up from ${suggestW}lb next session</div>`
@@ -1683,12 +1735,42 @@ function showWorkoutSummary(histId, elapsedSecs) {
 
   document.getElementById('summary-body').innerHTML = `
     ${statsHTML}
+    ${healthHTML}
     <div class="summary-section">
       <div class="summary-section-title">Exercise Breakdown</div>
       ${exRows}
     </div>`;
+}
 
-  document.getElementById('summary-overlay').classList.add('open');
+function importHealthData(histId) {
+  const input = document.createElement('input');
+  input.type = 'file'; input.accept = '.json';
+  input.onchange = e => {
+    const file = e.target.files[0]; if (!file) return;
+    const reader = new FileReader();
+    reader.onload = ev => {
+      try {
+        const data = JSON.parse(ev.target.result);
+        // Accept either a wrapped object or raw fields
+        const h = data.healthData || data;
+        if (!h.activeCalories && !h.avgHeartRate) { showToast('Unrecognized health file format','error'); return; }
+        const session = S.history.find(s => s.id === histId);
+        if (!session) return;
+        session.healthData = {
+          activeCalories: Math.round(h.activeCalories ?? h.active_calories ?? null),
+          totalCalories:  Math.round(h.totalCalories  ?? h.total_calories  ?? null),
+          avgHeartRate:   Math.round(h.avgHeartRate   ?? h.avg_heart_rate  ?? null),
+          peakHeartRate:  Math.round(h.peakHeartRate  ?? h.peak_heart_rate ?? null),
+          startTime: h.startTime ?? h.start_time ?? null,
+        };
+        save();
+        renderSummaryBody();
+        showToast('Apple Watch data imported','success');
+      } catch { showToast('Could not read health file','error'); }
+    };
+    reader.readAsText(file);
+  };
+  input.click();
 }
 
 function closeSummary() {
