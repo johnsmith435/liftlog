@@ -964,7 +964,10 @@ function sessionBodyHTML(session) {
       <input class="date-input-inline" type="date" id="date-edit-${session.id}" value="${session.date}">
       <button class="btn-save-date" onclick="saveSessionDate('${session.id}')">Save</button>
     </div>
-    <button class="btn-danger-sm" onclick="deleteSession('${session.id}')">Delete</button>
+    <div style="display:flex;gap:6px;align-items:center">
+      <button class="btn-save-date" onclick="viewSessionSummary('${session.id}')">Summary</button>
+      <button class="btn-danger-sm" onclick="deleteSession('${session.id}')">Delete</button>
+    </div>
   </div>`;
 }
 
@@ -1484,8 +1487,9 @@ function timerCardHTML() {
     </div>`;
 }
 
-function shouldSuggestWeightUp(exId) {
-  const hist = getExerciseHistory(exId);
+function shouldSuggestWeightUp(exId, excludeId) {
+  // Only look at sessions still in history (respects deletions), exclude current session
+  const hist = getExerciseHistory(exId).filter(h => h.id !== excludeId);
   if (hist.length < 3) return null;
   const recent = hist.slice(-3);
   const weights = recent.map(s => parseFloat(s.exercises[exId]?.[0]?.weight)||0);
@@ -1611,7 +1615,7 @@ function finishWorkout() {
   if (!Object.keys(logged).length) { showToast('Enter weight/reps before finishing','error'); clearInterval(WK.timerInterval); WK.timerInterval = setInterval(tickTimer,1000); return; }
 
   // Save to history
-  S.history.push({ id: Date.now().toString(), day, date: today(), exercises: logged });
+  S.history.push({ id: Date.now().toString(), day, date: today(), exercises: logged, duration: elapsed });
   const justLoggedId = S.history[S.history.length - 1].id;
   S.session[day] = {};
   save();
@@ -1641,8 +1645,9 @@ function renderSummaryBody() {
   const session = S.history.find(h => h.id === histId);
   if (!session) return;
 
-  const m = Math.floor(elapsedSecs / 60), s = elapsedSecs % 60;
-  const durationStr = elapsedSecs ? `${m}:${s.toString().padStart(2,'0')}` : '—';
+  const dur = elapsedSecs || session.duration || 0;
+  const m = Math.floor(dur / 60), s = dur % 60;
+  const durationStr = dur ? `${m}:${s.toString().padStart(2,'0')}` : '—';
   const exIds = Object.keys(session.exercises);
   const health = session.healthData || null;
 
@@ -1695,8 +1700,40 @@ function renderSummaryBody() {
           <div class="health-stat-val">${health.peakHeartRate ?? '—'}</div>
           <div class="health-stat-lbl">Peak HR</div>
         </div>
+        ${health.hrv != null ? `<div class="health-stat">
+          <div class="health-stat-val">${health.hrv}</div>
+          <div class="health-stat-lbl">HRV (ms)</div>
+        </div>` : ''}
+        ${health.activeCalories && health.totalCalories ? `<div class="health-stat">
+          <div class="health-stat-val">${health.totalCalories - health.activeCalories}</div>
+          <div class="health-stat-lbl">Resting Cal</div>
+        </div>` : ''}
       </div>
-    </div>` : `
+      ${health.hrTimeline?.length > 1 ? `
+      <div style="margin-top:12px">
+        <div style="font-size:10px;text-transform:uppercase;letter-spacing:0.5px;color:var(--muted);margin-bottom:6px">Heart Rate Throughout Workout</div>
+        <canvas id="hr-chart-${histId}" height="80"></canvas>
+      </div>` : ''}
+    </div>
+    <script>
+      (function() {
+        const canvas = document.getElementById('hr-chart-${histId}');
+        if (!canvas) return;
+        const data = ${JSON.stringify(health.hrTimeline || [])};
+        if (!data.length) return;
+        new Chart(canvas.getContext('2d'), {
+          type: 'line',
+          data: {
+            labels: data.map((_, i) => {
+              const mins = Math.round(i * (${JSON.stringify(health.workoutMinutes || 0)}) / (data.length - 1));
+              return mins + 'm';
+            }),
+            datasets: [{ data, borderColor: '#f87171', backgroundColor: 'rgba(248,113,113,0.1)', fill: true, tension: 0.4, pointRadius: 0, borderWidth: 2 }]
+          },
+          options: { responsive: true, plugins: { legend: { display: false }, tooltip: { callbacks: { label: c => c.parsed.y + ' bpm' } } }, scales: { x: { grid: { color: 'rgba(255,255,255,0.05)' }, ticks: { color: '#4b5563', maxTicksLimit: 6 } }, y: { grid: { color: 'rgba(255,255,255,0.05)' }, ticks: { color: '#4b5563' } } } }
+        });
+      })();
+    <\/script>` : `
     <button class="health-import-btn" onclick="importHealthData('${histId}')">
       ${heartSVG} Import Apple Watch Data
     </button>`;
@@ -1715,7 +1752,7 @@ function renderSummaryBody() {
     const prevBest = prevSessions.length ? parseFloat(prevSessions[prevSessions.length-1].exercises[exId]?.[0]?.weight)||0 : 0;
     const delta = w && prevBest ? w - prevBest : 0;
 
-    const suggestW = shouldSuggestWeightUp(exId);
+    const suggestW = shouldSuggestWeightUp(exId, histId);
     const suggestHTML = suggestW
       ? `<div class="summary-ex-insight">⬆ Consider moving up from ${suggestW}lb next session</div>`
       : '';
@@ -1778,11 +1815,20 @@ function importHealthData(histId) {
 
         const session = S.history.find(s => s.id === histId);
         if (!session) return;
+        const hrv       = pick('hrv','heartratevariability','heartratevariabilitysdnn','hrvsdnn');
+        const workoutMins = pick('workoutminutes','durationminutes','duration');
+        // hrTimeline: accept array of numbers
+        const rawTimeline = h.hrTimeline || h.hr_timeline || h.heartRateTimeline || h.heartrate_timeline || null;
+        const hrTimeline = Array.isArray(rawTimeline) ? rawTimeline.map(Number).filter(n => !isNaN(n)) : null;
+
         session.healthData = {
-          activeCalories: activeCal != null ? Math.round(activeCal) : null,
-          totalCalories:  totalCal  != null ? Math.round(totalCal)  : null,
-          avgHeartRate:   avgHR     != null ? Math.round(avgHR)     : null,
-          peakHeartRate:  peakHR    != null ? Math.round(peakHR)    : null,
+          activeCalories: activeCal  != null ? Math.round(activeCal)  : null,
+          totalCalories:  totalCal   != null ? Math.round(totalCal)   : null,
+          avgHeartRate:   avgHR      != null ? Math.round(avgHR)      : null,
+          peakHeartRate:  peakHR     != null ? Math.round(peakHR)     : null,
+          hrv:            hrv        != null ? Math.round(hrv)        : null,
+          workoutMinutes: workoutMins != null ? Math.round(workoutMins): null,
+          hrTimeline:     hrTimeline || null,
           startTime:      startTime ? String(startTime) : null,
         };
         save();
@@ -1793,6 +1839,13 @@ function importHealthData(histId) {
     reader.readAsText(file);
   };
   input.click();
+}
+
+function viewSessionSummary(histId) {
+  _summaryHistId = histId;
+  _summaryElapsed = 0;
+  renderSummaryBody();
+  document.getElementById('summary-overlay').classList.add('open');
 }
 
 function closeSummary() {
