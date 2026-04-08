@@ -1233,7 +1233,7 @@ function renderBankGrid() {
       ? `<div class="bank-item-desc" id="bdesc-${ex.id}" onclick="closeBankDesc();event.stopPropagation()">${ex.desc}${ex.caliUrl?`<br><a class="desc-src" href="${ex.caliUrl}" target="_blank" rel="noopener" onclick="event.stopPropagation()">View on Calistree ↗</a>`:''}</div>`
       : '';
     return `
-      <div class="bank-item ${isSel?'selected':inDay?'in-day':''}" data-exid="${ex.id}" onclick="selectExercise('${ex.id}')">
+      <div class="bank-item ${isSel?'selected':inDay?'in-day':''}" data-exid="${ex.id}">
         <div class="bank-item-name" style="padding-right:${ex.desc?(isCustom(ex)?'40px':'22px'):'8px'}">${ex.name}</div>
         <div class="bank-mg">${MG_LABELS[ex.muscleGroup]||ex.muscleGroup||''}</div>
         ${infoBtn}${delBtn}
@@ -1259,7 +1259,20 @@ function renderBankGrid() {
       <button class="btn btn-primary" style="width:100%;justify-content:center" onclick="addCustomExercise()">+ Add Exercise</button>
     </div>`;
 
-  document.getElementById('bank-grid').innerHTML = (items || `<div class="bank-empty">No exercises found</div>`) + addCard;
+  const grid = document.getElementById('bank-grid');
+  grid.innerHTML = (items || `<div class="bank-empty">No exercises found</div>`) + addCard;
+
+  // Re-attach touchend delegate each render (iOS: touchend fires instantly,
+  // click in overflow:auto containers requires a second tap)
+  grid._touchHandler && grid.removeEventListener('touchend', grid._touchHandler);
+  grid._touchHandler = function(e) {
+    const item = e.target.closest('.bank-item');
+    if (!item) return;
+    if (e.target.closest('.bank-item-info, .bank-item-delete, .bank-item-desc, .cali-link, .desc-src')) return;
+    e.preventDefault();
+    selectExercise(item.dataset.exid);
+  };
+  grid.addEventListener('touchend', grid._touchHandler, { passive: false });
 }
 
 function closeBankDesc() {
