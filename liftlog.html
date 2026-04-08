@@ -1290,25 +1290,44 @@ function deleteExercise(exId) {
 }
 
 function selectExercise(exId) {
+  // Close any open desc panel first
   closeBankDesc();
+
+  // If tapping the already-selected item, deselect and hide footer
+  if (BM.selectedId === exId) {
+    BM.selectedId = null;
+    document.querySelectorAll('#bank-grid .bank-item').forEach(el => el.classList.remove('selected'));
+    const footer = document.getElementById('bank-footer');
+    if (footer) footer.style.display = 'none';
+    return;
+  }
+
   BM.selectedId = exId;
-  // Update visual selection — use data-exid for exact match
+
+  // Deselect all, select this one
   document.querySelectorAll('#bank-grid .bank-item').forEach(el => {
     el.classList.remove('selected');
     if (el.dataset.exid === exId) el.classList.add('selected');
   });
-  const footer   = document.getElementById('bank-footer');
-  const addBtn   = document.getElementById('bank-add-btn');
-  const swapBtn  = document.getElementById('bank-swap-btn');
+
+  const footer  = document.getElementById('bank-footer');
+  const addBtn  = document.getElementById('bank-add-btn');
+  const swapBtn = document.getElementById('bank-swap-btn');
   const ex = S.bank[exId];
   if (!footer || !ex) return;
-  const inDay = S.split[BM.targetDay]?.includes(exId);
-  // Always show Add button (even if already in day — will show toast)
+
   addBtn.textContent = `+ Add ${ex.name}`;
-  // Show swap button if there are exercises already in the day to swap with
-  const hasExercises = S.split[BM.targetDay]?.length > 0;
+
+  // Show swap if there are exercises to swap with (day split or session)
+  let swappable = [];
+  if (BM.sessionId) {
+    const s = S.history.find(h => h.id === BM.sessionId);
+    swappable = Object.keys(s?.exercises || {}).filter(id => id !== exId);
+  } else if (BM.targetDay) {
+    swappable = (S.split[BM.targetDay] || []).filter(id => id !== exId);
+  }
   swapBtn.textContent = `⇄ Swap`;
-  swapBtn.style.display = hasExercises ? '' : 'none';
+  swapBtn.style.display = swappable.length > 0 ? '' : 'none';
   footer.style.display = 'block';
 }
 
