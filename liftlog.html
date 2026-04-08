@@ -184,11 +184,15 @@
     .bank-ext-link { position: absolute; top: 8px; right: 8px; width: 16px; height: 16px; display: flex; align-items: center; justify-content: center; border-radius: 3px; background: rgba(129,140,248,0.15); color: var(--primary); text-decoration: none; opacity: 0.7; transition: opacity 0.15s; }
     .bank-ext-link:hover { opacity: 1; background: rgba(129,140,248,0.3); }
     .bank-empty { grid-column: 1/-1; text-align: center; padding: 32px; color: var(--muted-light); font-size: 13px; }
-    .bank-add-row { display: flex; gap: 7px; padding: 12px 18px; border-top: 1px solid var(--border); flex-shrink: 0; }
-    .bank-input { flex: 1; background: var(--elevated); border: 1px solid var(--border); border-radius: var(--r-sm); padding: 7px 11px; color: var(--text); font-size: 13px; }
+    .bank-input { width: 100%; background: var(--bg); border: 1px solid var(--border); border-radius: var(--r-sm); padding: 7px 10px; color: var(--text); font-size: 14px; margin-bottom: 6px; }
     .bank-input:focus { outline: none; border-color: var(--primary); }
-    .bank-select { background: var(--elevated); border: 1px solid var(--border); border-radius: var(--r-sm); padding: 7px 11px; color: var(--muted-light); font-size: 13px; cursor: pointer; }
+    .bank-select { width: 100%; background: var(--bg); border: 1px solid var(--border); border-radius: var(--r-sm); padding: 7px 10px; color: var(--muted-light); font-size: 13px; cursor: pointer; margin-bottom: 8px; }
     .bank-select:focus { outline: none; border-color: var(--primary); }
+    .bank-add-card { grid-column: 1/-1; background: var(--elevated); border: 1px dashed var(--border); border-radius: var(--r-sm); padding: 12px; }
+    .bank-add-card-title { font-size: 10px; text-transform: uppercase; letter-spacing: 0.6px; color: var(--muted); margin-bottom: 8px; font-weight: 600; }
+    .bank-item-delete { position: absolute; top: 6px; right: 6px; width: 18px; height: 18px; display: flex; align-items: center; justify-content: center; border-radius: 3px; background: transparent; border: none; color: var(--muted); cursor: pointer; opacity: 0; transition: all 0.15s; }
+    .bank-item:hover .bank-item-delete { opacity: 1; }
+    .bank-item-delete:hover { color: var(--danger); background: rgba(248,113,113,0.15); }
 
     /* Dashboard */
     .stats-grid { display: grid; grid-template-columns: repeat(3,1fr); gap: 10px; margin-bottom: 20px; }
@@ -352,21 +356,6 @@
     </div>
     <div class="bank-filter-row" id="bank-filters"></div>
     <div class="bank-grid" id="bank-grid"></div>
-    <div class="bank-add-row">
-      <input class="bank-input" id="new-ex-name" type="text" placeholder="Custom exercise name…" onkeydown="if(event.key==='Enter') addCustomExercise()">
-      <select class="bank-select" id="new-ex-mg">
-        <option value="chest">Chest</option>
-        <option value="back">Back</option>
-        <option value="shoulders">Shoulders</option>
-        <option value="biceps">Biceps</option>
-        <option value="triceps">Triceps</option>
-        <option value="legs">Legs</option>
-        <option value="glutes">Glutes</option>
-        <option value="core">Core</option>
-        <option value="full body">Full Body</option>
-      </select>
-      <button class="btn btn-primary" style="padding:7px 13px;white-space:nowrap" onclick="addCustomExercise()">+ Add</button>
-    </div>
   </div>
 </div>
 
@@ -1039,20 +1028,58 @@ function renderBankGrid() {
   if (BM.filter!=='all') exs = exs.filter(e => e.muscleGroup===BM.filter);
   if (query) exs = exs.filter(e => e.name.toLowerCase().includes(query)||(e.muscleGroup||'').includes(query));
 
-  if (!exs.length) { document.getElementById('bank-grid').innerHTML=`<div class="bank-empty">No exercises found</div>`; return; }
-  document.getElementById('bank-grid').innerHTML = exs.map(ex => {
+  // Custom exercises are those not in DEFAULT_BANK
+  const isCustom = ex => !DEFAULT_BANK[ex.id];
+
+  const items = exs.map(ex => {
     const isSel = ex.id===BM.targetId;
     const inDay = split.includes(ex.id)&&!isSel;
     const extLnk = ex.caliUrl
       ? `<a class="bank-ext-link" href="${ex.caliUrl}" target="_blank" rel="noopener" title="View on Calistree" onclick="event.stopPropagation()">${svg(ICO.ext,8)}</a>`
       : '';
+    const delBtn = isCustom(ex)
+      ? `<button class="bank-item-delete" onclick="event.stopPropagation();deleteExercise('${ex.id}')" title="Delete">${svg(ICO.close,10)}</button>`
+      : '';
     return `
       <div class="bank-item ${isSel?'selected':inDay?'in-day':''}" onclick="selectExercise('${ex.id}')">
         <div class="bank-item-name">${ex.name}</div>
         <div class="bank-mg">${MG_LABELS[ex.muscleGroup]||ex.muscleGroup||''}</div>
-        ${extLnk}
+        ${extLnk}${delBtn}
       </div>`;
   }).join('');
+
+  const addCard = `
+    <div class="bank-add-card">
+      <div class="bank-add-card-title">Add Custom Exercise</div>
+      <input class="bank-input" id="new-ex-name" type="text" placeholder="Exercise name…" onkeydown="if(event.key==='Enter') addCustomExercise()">
+      <select class="bank-select" id="new-ex-mg">
+        <option value="chest">Chest</option>
+        <option value="back">Back</option>
+        <option value="shoulders">Shoulders</option>
+        <option value="biceps">Biceps</option>
+        <option value="triceps">Triceps</option>
+        <option value="legs">Legs</option>
+        <option value="glutes">Glutes</option>
+        <option value="core">Core</option>
+        <option value="full body">Full Body</option>
+      </select>
+      <button class="btn btn-primary" style="width:100%;justify-content:center" onclick="addCustomExercise()">+ Add Exercise</button>
+    </div>`;
+
+  document.getElementById('bank-grid').innerHTML = (items || `<div class="bank-empty">No exercises found</div>`) + addCard;
+}
+
+function deleteExercise(exId) {
+  if (!confirm(`Delete "${S.bank[exId]?.name}"? This cannot be undone.`)) return;
+  // Remove from all day splits and sessions
+  ['push','pull','legs','arms'].forEach(day => {
+    S.split[day] = S.split[day].filter(id => id !== exId);
+    delete S.session[day][exId];
+  });
+  delete S.bank[exId];
+  save();
+  renderBankGrid();
+  showToast('Exercise deleted', 'success');
 }
 
 function selectExercise(exId) {
