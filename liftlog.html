@@ -1115,16 +1115,20 @@ function removeSessionExercise(sessionId, exId) {
 
 function saveSessionEdits(id) {
   const s = S.history.find(h => h.id===id); if (!s) return;
-  // Also save date
+  // Save date
   const dateInput = document.getElementById(`date-edit-${id}`);
   if (dateInput?.value) s.date = dateInput.value;
   // Flush all inputs before saving (in case onchange didn't fire on mobile)
   Object.keys(s.exercises).forEach(exId => updateSessionEntry(id, exId));
   editingSessions[id] = false;
+  openSessions[id] = false;
   save();
+  // Collapse the session row closed
+  const row  = document.getElementById(`srow-${id}`);
   const body = document.getElementById(`sbody-${id}`);
-  if (body) body.innerHTML = sessionBodyHTML(s, false);
-  showToast('Session updated', 'success');
+  if (row)  row.classList.remove('open');
+  if (body) body.innerHTML = '';
+  showToast('Session saved', 'success');
 }
 
 function toggleSession(id) {
