@@ -188,6 +188,7 @@
     .bank-input:focus { outline: none; border-color: var(--primary); }
     .bank-select { width: 100%; background: var(--bg); border: 1px solid var(--border); border-radius: var(--r-sm); padding: 7px 10px; color: var(--muted-light); font-size: 13px; cursor: pointer; margin-bottom: 8px; }
     .bank-select:focus { outline: none; border-color: var(--primary); }
+    .bank-footer { padding: 10px 18px; padding-bottom: max(10px, env(safe-area-inset-bottom)); border-top: 1px solid var(--border); background: var(--card); flex-shrink: 0; }
     .bank-add-card { grid-column: 1/-1; background: var(--elevated); border: 1px dashed var(--border); border-radius: var(--r-sm); padding: 12px; }
     .bank-add-card-title { font-size: 10px; text-transform: uppercase; letter-spacing: 0.6px; color: var(--muted); margin-bottom: 8px; font-weight: 600; }
     .bank-item-delete { position: absolute; top: 6px; right: 6px; width: 18px; height: 18px; display: flex; align-items: center; justify-content: center; border-radius: 3px; background: transparent; border: none; color: var(--muted); cursor: pointer; opacity: 0; transition: all 0.15s; }
@@ -356,6 +357,9 @@
     </div>
     <div class="bank-filter-row" id="bank-filters"></div>
     <div class="bank-grid" id="bank-grid"></div>
+    <div class="bank-footer" id="bank-footer" style="display:none">
+      <button class="btn btn-primary" style="width:100%;justify-content:center" id="bank-confirm-btn" onclick="confirmBankSelection()"></button>
+    </div>
   </div>
 </div>
 
@@ -536,7 +540,7 @@ let S = {
   history: [], // [{id,day,date,exercises:{exId:[{weight,reps}...]}}]
 };
 
-let BM = { targetId:null, targetDay:null, filter:'all' };
+let BM = { targetId:null, targetDay:null, filter:'all', selectedId:null };
 let charts = {};
 let openSessions = {};
 let openDescs = {};
@@ -997,9 +1001,11 @@ function toggleShowAll(day) { showAllHistory[day]=!showAllHistory[day]; render()
 
 // ── Bank modal ─────────────────────────────────────────────────────────────
 function openBankModal(targetId, day) {
-  BM.targetId=targetId; BM.targetDay=day; BM.filter='all';
+  BM.targetId=targetId; BM.targetDay=day; BM.filter='all'; BM.selectedId=null;
   document.getElementById('modal-title').textContent = targetId ? 'Swap Exercise' : 'Add Exercise';
   document.getElementById('bank-search').value = '';
+  const footer = document.getElementById('bank-footer');
+  if (footer) footer.style.display = 'none';
   renderBankFilters(); renderBankGrid();
   document.getElementById('bank-modal').classList.add('open');
 }
@@ -1083,19 +1089,39 @@ function deleteExercise(exId) {
 }
 
 function selectExercise(exId) {
-  const day = BM.targetDay;
-  if (!day) { closeBankModal(); return; }
+  // Just highlight — confirmation happens via confirmBankSelection
+  BM.selectedId = exId;
+  // Update visual selection
+  document.querySelectorAll('#bank-grid .bank-item').forEach(el => {
+    el.classList.toggle('selected', el.getAttribute('onclick')?.includes(`'${exId}'`));
+  });
+  // Show confirm footer
+  const footer = document.getElementById('bank-footer');
+  const btn    = document.getElementById('bank-confirm-btn');
+  const ex     = S.bank[exId];
+  if (footer && btn && ex) {
+    const label = BM.targetId ? `Swap for ${ex.name}` : `Add ${ex.name}`;
+    btn.textContent = label;
+    footer.style.display = 'block';
+  }
+}
+
+function confirmBankSelection() {
+  const exId = BM.selectedId;
+  const day  = BM.targetDay;
+  if (!exId || !day) return;
   if (BM.targetId) {
     const idx = S.split[day].indexOf(BM.targetId);
-    if (idx!==-1) {
+    if (idx !== -1) {
       S.split[day][idx] = exId;
-      if (S.session[day][BM.targetId]) { S.session[day][exId]=S.session[day][BM.targetId]; delete S.session[day][BM.targetId]; }
+      if (S.session[day][BM.targetId]) { S.session[day][exId] = S.session[day][BM.targetId]; delete S.session[day][BM.targetId]; }
     }
   } else {
-    if (S.split[day].includes(exId)) { showToast('Already in this day','error'); return; }
+    if (S.split[day].includes(exId)) { showToast('Already in this day', 'error'); return; }
     S.split[day].push(exId);
   }
   save(); closeBankModal(); render();
+  if (WK.day) renderWorkoutCards();
 }
 
 function addCustomExercise() {
@@ -1889,12 +1915,6 @@ function closeSummary() {
   document.getElementById('summary-overlay').classList.remove('open');
 }
 
-// Re-render workout cards when bank modal adds/swaps an exercise during an active workout
-const _origSelectExercise = selectExercise;
-function selectExercise(exId) {
-  _origSelectExercise(exId);
-  if (WK.day) renderWorkoutCards();
-}
 
 // ── Toast ──────────────────────────────────────────────────────────────────
 let _tt;
