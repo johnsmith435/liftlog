@@ -720,12 +720,12 @@ function dayHTML(day) {
       </div>
       <button class="btn btn-ghost" onclick="openBankModal(null,'${day}')">${svg(ICO.plus)} Add</button>
     </div>
-    <div class="exercises-list" id="list-${day}">${cards}</div>
-    <div class="workout-actions">
+    <div class="workout-actions" style="margin-top:0;margin-bottom:16px">
       <button class="btn btn-primary" onclick="startWorkout('${day}')" style="flex:1">${svg(ICO.check)} Start Workout</button>
       <button class="btn btn-ghost"   onclick="logWorkout('${day}')">Quick Log</button>
       <button class="btn btn-ghost"   onclick="clearDay('${day}')">Clear</button>
     </div>
+    <div class="exercises-list" id="list-${day}">${cards}</div>
     ${sessionHistoryHTML(day, daySessions)}`;
 }
 
@@ -1513,10 +1513,10 @@ function workoutCardHTML(exId, day, lastSession) {
           ${isDone ? svg(ICO.check, 11) : ''}
         </button>
         <div class="wk-card-name">${ex.name}${caliLink}</div>
-        <div class="card-actions">
+        ${isDone ? '' : `<div class="card-actions">
           <button class="icon-btn swap"   onclick="openBankModal('${exId}','${day}')"  title="Swap">${svg(ICO.swap)}</button>
           <button class="icon-btn danger" onclick="removeFromWorkout('${exId}')" title="Remove">${svg(ICO.close)}</button>
-        </div>
+        </div>`}
       </div>
       ${prevHTML}${suggestHTML}
       <div class="wk-card-body">
@@ -1548,13 +1548,11 @@ function workoutCardHTML(exId, day, lastSession) {
 
 function toggleWkDone(exId) {
   WK.done[exId] = !WK.done[exId];
+  // Re-render just this card so buttons appear/disappear correctly
   const card = document.querySelector(`#wk-scroll .wk-card[data-id="${exId}"]`);
   if (card) {
-    card.classList.toggle('done', WK.done[exId]);
-    const btn = card.querySelector('.wk-done-btn');
-    if (btn) { btn.classList.toggle('checked', WK.done[exId]); btn.innerHTML = WK.done[exId] ? svg(ICO.check,11) : ''; }
-    const suggest = card.querySelector('.wk-suggest');
-    if (suggest && WK.done[exId]) suggest.style.display = 'none';
+    const last = getLastSession(WK.day);
+    card.outerHTML = workoutCardHTML(exId, WK.day, last);
   }
   // Update progress chip
   const doneCount = Object.values(WK.done).filter(Boolean).length;
