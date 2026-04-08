@@ -285,8 +285,12 @@
     html[data-theme="light"] .health-stat { background: rgba(255,255,255,0.6); }
     .health-stat-val { font-size: 24px; font-weight: 700; color: var(--danger); font-family: 'SF Mono','Fira Code',ui-monospace,monospace; }
     .health-stat-lbl { font-size: 10px; text-transform: uppercase; letter-spacing: 0.5px; color: var(--muted-light); margin-top: 2px; }
-    .health-import-btn { display: flex; align-items: center; gap: 7px; padding: 10px 16px; border-radius: var(--r-sm); border: 1px dashed rgba(248,113,113,0.4); background: transparent; color: var(--danger); font-size: 13px; font-weight: 600; cursor: pointer; width: 100%; justify-content: center; transition: all 0.15s; margin-bottom: 16px; }
+    .health-import-btn { display: flex; align-items: center; gap: 7px; padding: 10px 16px; border-radius: var(--r-sm); border: 1px dashed rgba(248,113,113,0.4); background: transparent; color: var(--danger); font-size: 13px; font-weight: 600; cursor: pointer; width: 100%; justify-content: center; transition: all 0.15s; }
     .health-import-btn:hover { background: rgba(248,113,113,0.08); border-color: var(--danger); }
+    .health-btn-row { display: flex; gap: 8px; margin-bottom: 16px; }
+    .health-btn-row .health-import-btn { flex: 1; margin-bottom: 0; }
+    .health-scriptable-btn { display: flex; align-items: center; gap: 6px; padding: 10px 14px; border-radius: var(--r-sm); border: 1px solid rgba(248,113,113,0.3); background: rgba(248,113,113,0.06); color: var(--danger); font-size: 12px; font-weight: 600; cursor: pointer; text-decoration: none; white-space: nowrap; transition: all 0.15s; flex-shrink: 0; }
+    .health-scriptable-btn:hover { background: rgba(248,113,113,0.12); border-color: var(--danger); }
 
     /* Light theme overrides */
     html[data-theme="light"] {
@@ -1697,9 +1701,14 @@ function renderSummaryBody() {
         </div>
       </div>
     </div>` : `
-    <button class="health-import-btn" onclick="importHealthData('${histId}')">
-      ${heartSVG} Import Apple Watch Data
-    </button>`;
+    <div class="health-btn-row">
+      <a class="health-scriptable-btn" href="scriptable:///run?scriptName=Export%20Workout" title="Run Scriptable export script">
+        ${heartSVG} Run Script
+      </a>
+      <button class="health-import-btn" onclick="importHealthData('${histId}')">
+        ${heartSVG} Import Apple Watch Data
+      </button>
+    </div>`;
 
   // Per-exercise breakdown
   const exRows = exIds.map(exId => {
