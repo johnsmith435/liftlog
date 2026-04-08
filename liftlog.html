@@ -1217,9 +1217,6 @@ function renderBankGrid() {
   const items = exs.map(ex => {
     const isSel = ex.id===BM.targetId;
     const inDay = split.includes(ex.id)&&!isSel;
-    const extLnk = ex.caliUrl
-      ? `<a class="bank-ext-link" href="${ex.caliUrl}" target="_blank" rel="noopener" title="View on Calistree" onclick="event.stopPropagation()">${svg(ICO.ext,8)}</a>`
-      : '';
     const delBtn = isCustom(ex)
       ? `<button class="bank-item-delete" onclick="event.stopPropagation();deleteExercise('${ex.id}')" title="Delete">${svg(ICO.close,10)}</button>`
       : '';
@@ -1227,13 +1224,13 @@ function renderBankGrid() {
       ? `<button class="bank-item-info${isCustom(ex)?'':' solo'}" onclick="event.stopPropagation();toggleBankDesc('${ex.id}')" title="About">${svg(ICO.info,11)}</button>`
       : '';
     const descPanel = ex.desc
-      ? `<div class="bank-item-desc" id="bdesc-${ex.id}">${ex.desc}${ex.caliUrl?`<br><a class="desc-src" href="${ex.caliUrl}" target="_blank" rel="noopener">View on Calistree ↗</a>`:''}</div>`
+      ? `<div class="bank-item-desc" id="bdesc-${ex.id}" onclick="event.stopPropagation()">${ex.desc}${ex.caliUrl?`<br><a class="desc-src" href="${ex.caliUrl}" target="_blank" rel="noopener">View on Calistree ↗</a>`:''}</div>`
       : '';
     return `
       <div class="bank-item ${isSel?'selected':inDay?'in-day':''}" data-exid="${ex.id}" onclick="selectExercise('${ex.id}')">
-        <div class="bank-item-name" style="padding-right:${ex.desc?(isCustom(ex)?'40px':'22px'):'20px'}">${ex.name}</div>
+        <div class="bank-item-name" style="padding-right:${ex.desc?(isCustom(ex)?'40px':'22px'):'8px'}">${ex.name}</div>
         <div class="bank-mg">${MG_LABELS[ex.muscleGroup]||ex.muscleGroup||''}</div>
-        ${extLnk}${infoBtn}${delBtn}
+        ${infoBtn}${delBtn}
         ${descPanel}
       </div>`;
   }).join('');
