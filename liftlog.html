@@ -555,7 +555,7 @@ let S = {
   history: [], // [{id,day,date,exercises:{exId:[{weight,reps}...]}}]
 };
 
-let BM = { targetId:null, targetDay:null, filter:'all', selectedId:null };
+let BM = { targetId:null, targetDay:null, filter:'all', selectedId:null, sessionId:null };
 let charts = {};
 let openSessions = {};
 let openDescs = {};
@@ -969,7 +969,10 @@ function sessionBodyHTML(session, editing=false) {
         <div class="session-ex-row">
           <div class="session-ex-header">
             <div class="session-ex-name">${ex?ex.name:exId}</div>
-            <button class="btn-danger-sm" onclick="removeSessionExercise('${session.id}','${exId}')">Remove</button>
+            <div style="display:flex;gap:5px">
+              <button class="btn-save-date" onclick="openSessionBankModal('${session.id}','${exId}')">Swap</button>
+              <button class="btn-danger-sm" onclick="removeSessionExercise('${session.id}','${exId}')">Remove</button>
+            </div>
           </div>
           <div class="set-control-row" style="margin-top:8px">
             <div class="set-field">
@@ -1004,12 +1007,13 @@ function sessionBodyHTML(session, editing=false) {
   }).join('');
 
   const footer = editing ? `
-    <div class="session-footer">
+    <div class="session-footer" style="flex-wrap:wrap;gap:8px">
       <div class="session-date-edit">
         <span style="font-size:11px;color:var(--muted)">Date:</span>
         <input class="date-input-inline" type="date" id="date-edit-${session.id}" value="${session.date}">
       </div>
-      <div style="display:flex;gap:6px;align-items:center">
+      <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap">
+        <button class="btn-save-date" onclick="openSessionBankModal('${session.id}',null)">+ Add</button>
         <button class="btn-save-date" onclick="saveSessionEdits('${session.id}')">Save</button>
         <button class="btn-danger-sm" onclick="cancelSessionEdit('${session.id}')">Cancel</button>
       </div>
@@ -1118,8 +1122,21 @@ function saveSessionDate(id) {
 function toggleShowAll(day) { showAllHistory[day]=!showAllHistory[day]; render(); }
 
 // ── Bank modal ─────────────────────────────────────────────────────────────
+function openSessionBankModal(sessionId, swapOutId) {
+  BM.sessionId=sessionId; BM.targetId=swapOutId||null; BM.targetDay=null; BM.filter='all'; BM.selectedId=null;
+  document.getElementById('modal-title').textContent = swapOutId ? 'Swap Exercise' : 'Add Exercise';
+  document.getElementById('bank-search').value = '';
+  const footer = document.getElementById('bank-footer');
+  if (footer) footer.style.display = 'none';
+  const swapBtn = document.getElementById('bank-swap-btn');
+  if (swapBtn) swapBtn.style.display = 'none';
+  document.getElementById('swap-picker').style.display = 'none';
+  renderBankFilters(); renderBankGrid();
+  document.getElementById('bank-modal').classList.add('open');
+}
+
 function openBankModal(targetId, day) {
-  BM.targetId=targetId; BM.targetDay=day; BM.filter='all'; BM.selectedId=null;
+  BM.sessionId=null; BM.targetId=targetId; BM.targetDay=day; BM.filter='all'; BM.selectedId=null;
   document.getElementById('modal-title').textContent = targetId ? 'Swap Exercise' : 'Add Exercise';
   document.getElementById('bank-search').value = '';
   const footer = document.getElementById('bank-footer');
@@ -1232,10 +1249,29 @@ function selectExercise(exId) {
 
 function confirmBankSelection() {
   const exId = BM.selectedId;
-  const day  = BM.targetDay;
-  if (!exId || !day) return;
+  if (!exId) return;
+
+  // Session edit mode
+  if (BM.sessionId) {
+    const s = S.history.find(h => h.id === BM.sessionId); if (!s) return;
+    if (BM.targetId) {
+      // Swap: replace targetId with new exercise, carry over sets
+      const existing = s.exercises[BM.targetId];
+      s.exercises[exId] = existing || [{ weight: '', reps: '' }];
+      delete s.exercises[BM.targetId];
+    } else {
+      if (s.exercises[exId]) { showToast('Already in this session', 'error'); return; }
+      s.exercises[exId] = [{ weight: '', reps: '' }];
+    }
+    closeBankModal();
+    const body = document.getElementById(`sbody-${BM.sessionId}`);
+    if (body) body.innerHTML = sessionBodyHTML(s, true);
+    return;
+  }
+
+  const day = BM.targetDay;
+  if (!day) return;
   if (BM.targetId) {
-    // Came from swap icon on a card — swap directly
     const idx = S.split[day].indexOf(BM.targetId);
     if (idx !== -1) {
       S.split[day][idx] = exId;
@@ -1250,11 +1286,17 @@ function confirmBankSelection() {
 }
 
 function showSwapPicker() {
-  const day = BM.targetDay;
-  const exId = BM.selectedId;
-  if (!day || !exId) return;
+  const exId = BM.selectedId; if (!exId) return;
   const list = document.getElementById('swap-picker-list');
-  const exercises = S.split[day].filter(id => id !== exId);
+
+  let exercises = [];
+  if (BM.sessionId) {
+    const s = S.history.find(h => h.id === BM.sessionId);
+    exercises = Object.keys(s?.exercises || {}).filter(id => id !== exId);
+  } else {
+    exercises = S.split[BM.targetDay||'']?.filter(id => id !== exId) || [];
+  }
+
   if (!exercises.length) { showToast('No exercises to swap with', 'error'); return; }
   list.innerHTML = exercises.map(id => {
     const ex = S.bank[id];
@@ -1273,9 +1315,19 @@ function hideSwapPicker() {
 }
 
 function doSwap(swapOutId) {
-  const exId = BM.selectedId;
-  const day  = BM.targetDay;
-  if (!exId || !day) return;
+  const exId = BM.selectedId; if (!exId) return;
+
+  if (BM.sessionId) {
+    const s = S.history.find(h => h.id === BM.sessionId); if (!s) return;
+    s.exercises[exId] = s.exercises[swapOutId] || [{ weight: '', reps: '' }];
+    delete s.exercises[swapOutId];
+    closeBankModal();
+    const body = document.getElementById(`sbody-${BM.sessionId}`);
+    if (body) body.innerHTML = sessionBodyHTML(s, true);
+    return;
+  }
+
+  const day = BM.targetDay; if (!day) return;
   const idx = S.split[day].indexOf(swapOutId);
   if (idx !== -1) {
     S.split[day][idx] = exId;
