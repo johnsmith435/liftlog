@@ -980,6 +980,8 @@ function toggleSession(id) {
   if (openSessions[id]) {
     const s = S.history.find(h => h.id===id);
     if (s) body.innerHTML = sessionBodyHTML(s);
+    // Scroll the expanded card into view after content renders
+    setTimeout(() => row.scrollIntoView({ behavior: 'smooth', block: 'start' }), 50);
   }
 }
 
