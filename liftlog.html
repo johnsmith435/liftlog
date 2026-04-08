@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, viewport-fit=cover">
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black">
   <meta name="apple-mobile-web-app-title" content="LiftLog">
@@ -15,6 +15,7 @@
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
   <style>
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    html { touch-action: manipulation; }
     :root {
       --bg: #0a0a0a; --card: #141414; --elevated: #1c1c1c;
       --border: #262626; --border-hover: #363636;
@@ -167,7 +168,7 @@
     .close-btn { width: 30px; height: 30px; display: flex; align-items: center; justify-content: center; border-radius: var(--r-sm); border: none; background: var(--elevated); color: var(--muted-light); cursor: pointer; font-size: 18px; line-height: 1; }
     .close-btn:hover { color: var(--text); }
     .bank-search-row { padding: 10px 18px 0; flex-shrink: 0; }
-    .bank-search { width: 100%; background: var(--elevated); border: 1px solid var(--border); border-radius: var(--r-sm); padding: 8px 12px; color: var(--text); font-size: 13px; outline: none; transition: border-color 0.15s; }
+    .bank-search { width: 100%; background: var(--elevated); border: 1px solid var(--border); border-radius: var(--r-sm); padding: 8px 12px; color: var(--text); font-size: 16px; outline: none; transition: border-color 0.15s; }
     .bank-search:focus { border-color: var(--primary); }
     .bank-search::placeholder { color: var(--muted); }
     .bank-filter-row { display: flex; gap: 6px; padding: 10px 18px; border-bottom: 1px solid var(--border); overflow-x: auto; scrollbar-width: none; flex-shrink: 0; }
