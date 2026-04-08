@@ -1,3 +1,4 @@
+<!-- LiftLog v4 -->
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -341,7 +342,7 @@
 <body>
 
 <div class="header">
-  <div class="logo">Lift<span>Log</span></div>
+  <div class="logo">Lift<span>Log</span> <span style="font-size:10px;color:var(--muted);font-weight:400">v4</span></div>
   <div style="display:flex;align-items:center;gap:10px">
     <div class="header-date" id="header-date"></div>
     <button class="theme-toggle" id="theme-toggle" onclick="toggleTheme()" title="Toggle light/dark mode">🌙</button>
@@ -2224,7 +2225,7 @@ document.getElementById('header-date').textContent =
 
 // Register service worker for PWA / offline support
 if ('serviceWorker' in navigator) {
-  navigator.serviceWorker.register('./sw.js').catch(() => {});
+  navigator.serviceWorker.register('./sw.js?v=4').catch(() => {});
 }
 
 // ── Theme ──────────────────────────────────────────────────────────────────
