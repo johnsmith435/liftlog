@@ -1182,6 +1182,7 @@ function openBankModal(targetId, day) {
   if (footer) footer.style.display = 'none';
   const swapBtn = document.getElementById('bank-swap-btn');
   if (swapBtn) swapBtn.style.display = 'none';
+  document.getElementById('swap-picker').style.display = 'none';
   renderBankFilters(); renderBankGrid();
   document.getElementById('bank-modal').classList.add('open');
 }
@@ -1306,10 +1307,9 @@ function selectExercise(exId) {
   const footer  = document.getElementById('bank-footer');
   const addBtn  = document.getElementById('bank-add-btn');
   const swapBtn = document.getElementById('bank-swap-btn');
+  if (!footer) return;
   const ex = S.bank[exId];
-  if (!footer || !ex) return;
-
-  addBtn.textContent = `+ Add ${ex.name}`;
+  if (addBtn) addBtn.textContent = ex ? `+ Add ${ex.name}` : '+ Add';
 
   // Show swap if there are exercises to swap with (day split or session)
   let swappable = [];
