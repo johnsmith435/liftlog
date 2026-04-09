@@ -2409,12 +2409,16 @@ function renderSummaryBody() {
       (function() {
         const canvas = document.getElementById('hr-chart-${histId}');
         if (!canvas) return;
-        const data = ${JSON.stringify(health.hrTimeline)};
-        const mins = ${JSON.stringify(health.workoutMinutes || 0)};
+        const data   = ${JSON.stringify(health.hrTimeline)};
+        const labels = ${JSON.stringify(
+          health.hrTimelineLabels?.length
+            ? health.hrTimelineLabels
+            : (() => { const m = health.workoutMinutes || 0; return data.map((_, i) => m ? Math.round(i * m / (data.length - 1)) + 'm' : String(i)); })()
+        )};
         new Chart(canvas.getContext('2d'), {
           type: 'line',
           data: {
-            labels: data.map((_, i) => mins ? Math.round(i * mins / (data.length-1)) + 'm' : i),
+            labels,
             datasets: [{ data, borderColor: '#f87171', backgroundColor: 'rgba(248,113,113,0.12)', fill: true, tension: 0.4, pointRadius: 0, borderWidth: 2 }]
           },
           options: { responsive: true, plugins: { legend: { display: false }, tooltip: { callbacks: { label: c => c.parsed.y + ' bpm' } } }, scales: { x: { grid: { color: 'rgba(255,255,255,0.05)' }, ticks: { color: '#4b5563', maxTicksLimit: 8 } }, y: { grid: { color: 'rgba(255,255,255,0.05)' }, ticks: { color: '#4b5563' } } } }
@@ -2474,53 +2478,62 @@ function importHealthData(histId) {
       try {
         const data = JSON.parse(ev.target.result);
 
-        // ── Health Exporter & Shortcuts format ──
-        // { workouts: [{ startDate, endDate, duration, statistics: {
-        //   HKQuantityTypeIdentifierActiveEnergyBurned: { sum },
-        //   HKQuantityTypeIdentifierBasalEnergyBurned:  { sum },
-        //   HKQuantityTypeIdentifierHeartRate: { average, max, min }
-        // }}]}
-        let activeCal, totalCal, avgHR, peakHR, minHR, startTime, durationSecs, hrv, hrTimeline = null;
+        // ── Health Auto Export format ──
+        // { data: { workouts: [{ activeEnergyBurned, heartRate, heartRateData, duration, start, avgHeartRate, maxHeartRate }],
+        //           metrics: [{ name, data: [{ qty }] }] } }
+        let activeCal, totalCal, avgHR, peakHR, startTime, durationSecs, hrv, hrTimeline = null, hrTimelineLabels = null;
 
-        if (data.workouts && Array.isArray(data.workouts) && data.workouts.length > 0) {
-          // Pick the most recent workout
-          const w = data.workouts[data.workouts.length - 1];
-          const stats = w.statistics || {};
-          const hrStats  = stats['HKQuantityTypeIdentifierHeartRate'] || {};
-          const actCal   = stats['HKQuantityTypeIdentifierActiveEnergyBurned'] || {};
-          const basCal   = stats['HKQuantityTypeIdentifierBasalEnergyBurned'] || {};
-          const hrvStats = stats['HKQuantityTypeIdentifierHeartRateVariabilitySDNN'] || {};
+        // Detect Health Auto Export: data.data.workouts
+        const haeData = data.data || data;
+        if (haeData.workouts && Array.isArray(haeData.workouts) && haeData.workouts.length > 0) {
+          const w = haeData.workouts[haeData.workouts.length - 1];
 
-          activeCal    = actCal.sum   ?? null;
-          totalCal     = (actCal.sum != null && basCal.sum != null) ? actCal.sum + basCal.sum : null;
-          avgHR        = hrStats.average ?? null;
-          peakHR       = hrStats.max     ?? null;
-          minHR        = hrStats.min     ?? null;
-          hrv          = hrvStats.average ?? null;
-          startTime    = w.startDate    ?? null;
-          durationSecs = w.duration     ?? null;
+          activeCal    = w.activeEnergyBurned?.qty ?? null;
+          avgHR        = w.heartRate?.avg?.qty ?? w.avgHeartRate?.qty ?? null;
+          peakHR       = w.heartRate?.max?.qty ?? w.maxHeartRate?.qty ?? null;
+          startTime    = w.start ?? null;
+          durationSecs = w.duration ?? null;
 
-          // HR timeline from workout route/samples if present
-          const rawTimeline = w.heartRateSamples || w.hrSamples || w.heartRate || null;
-          hrTimeline = Array.isArray(rawTimeline)
-            ? rawTimeline.map(s => Number(s.value ?? s) ).filter(n => !isNaN(n) && n > 0)
-            : null;
+          // Total cal = active + basal (basal from metrics if available)
+          const metrics = haeData.metrics || [];
+          const basalMetric = metrics.find(m => m.name === 'basal_energy_burned');
+          const basalCal = basalMetric?.data?.[0]?.qty ?? null;
+          totalCal = (activeCal != null && basalCal != null) ? activeCal + basalCal : null;
+
+          // HRV from daily metrics
+          const hrvMetric = metrics.find(m => m.name === 'heart_rate_variability');
+          hrv = hrvMetric?.data?.[0]?.qty ?? null;
+
+          // Per-minute HR timeline from heartRateData[]
+          if (Array.isArray(w.heartRateData) && w.heartRateData.length > 1) {
+            // Sort by date ascending
+            const sorted = [...w.heartRateData].sort((a, b) => new Date(a.date) - new Date(b.date));
+            const t0 = new Date(sorted[0].date).getTime();
+            hrTimeline = sorted.map(d => Math.round(d.Avg));
+            hrTimelineLabels = sorted.map(d => {
+              const mins = Math.round((new Date(d.date).getTime() - t0) / 60000);
+              return mins + 'm';
+            });
+          }
 
         } else {
-          // Legacy flat / Shortcuts format fallback
-          const h = data.healthData || data;
-          const flat = {};
-          Object.keys(h).forEach(k => { flat[k.toLowerCase().replace(/[_\s]/g,'')] = h[k]; });
-          const pick = (...keys) => { for (const k of keys) { const v = flat[k]; if (v != null && v !== '') return v; } return null; };
-          activeCal    = pick('activecalories','activeenergy','activeenergyburned');
-          totalCal     = pick('totalcalories','totalenergy','totalenergyburned');
-          avgHR        = pick('avgheartrate','averageheartrate');
-          peakHR       = pick('peakheartrate','maxheartrate','maximumheartrate');
-          hrv          = pick('hrv','heartratevariability');
-          startTime    = pick('starttime','startdate','start');
-          durationSecs = pick('duration');
-          const rawTimeline = h.hrTimeline || h.heartRateTimeline || null;
-          hrTimeline   = Array.isArray(rawTimeline) ? rawTimeline.map(Number).filter(n => !isNaN(n) && n > 0) : null;
+          // Legacy Health Exporter (HKQuantityTypeIdentifier* keys)
+          const workouts = data.workouts || [];
+          if (workouts.length > 0) {
+            const w = workouts[workouts.length - 1];
+            const stats = w.statistics || {};
+            const hrStats  = stats['HKQuantityTypeIdentifierHeartRate'] || {};
+            const actCal   = stats['HKQuantityTypeIdentifierActiveEnergyBurned'] || {};
+            const basCal   = stats['HKQuantityTypeIdentifierBasalEnergyBurned'] || {};
+            const hrvStats = stats['HKQuantityTypeIdentifierHeartRateVariabilitySDNN'] || {};
+            activeCal    = actCal.sum   ?? null;
+            totalCal     = (actCal.sum != null && basCal.sum != null) ? actCal.sum + basCal.sum : null;
+            avgHR        = hrStats.average ?? null;
+            peakHR       = hrStats.max     ?? null;
+            hrv          = hrvStats.average ?? null;
+            startTime    = w.startDate    ?? null;
+            durationSecs = w.duration     ?? null;
+          }
         }
 
         if (activeCal == null && avgHR == null) {
@@ -2535,15 +2548,15 @@ function importHealthData(histId) {
         const workoutMins = durationSecs != null ? Math.round(durationSecs / 60) : null;
 
         session.healthData = {
-          activeCalories: nonZero(activeCal),
-          totalCalories:  nonZero(totalCal),
-          avgHeartRate:   nonZero(avgHR),
-          peakHeartRate:  nonZero(peakHR),
-          minHeartRate:   nonZero(minHR),
-          hrv:            nonZero(hrv),
-          workoutMinutes: workoutMins,
-          hrTimeline:     hrTimeline?.length ? hrTimeline : null,
-          startTime:      startTime ? String(startTime) : null,
+          activeCalories:    nonZero(activeCal),
+          totalCalories:     nonZero(totalCal),
+          avgHeartRate:      nonZero(avgHR),
+          peakHeartRate:     nonZero(peakHR),
+          hrv:               hrv != null ? Math.round(hrv * 10) / 10 : null,
+          workoutMinutes:    workoutMins,
+          hrTimeline:        hrTimeline?.length > 1 ? hrTimeline : null,
+          hrTimelineLabels:  hrTimelineLabels?.length > 1 ? hrTimelineLabels : null,
+          startTime:         startTime ? String(startTime) : null,
         };
         save();
         renderSummaryBody();
