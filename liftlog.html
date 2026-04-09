@@ -586,6 +586,7 @@ let S = {
   // session[day][exId] = { weight, reps, sets }
   session: { push:{}, pull:{}, legs:{}, arms:{} },
   history: [], // [{id,day,date,exercises:{exId:[{weight,reps}...]}}]
+  flaggedForIncrease: {}, // exId → true: user manually flagged for weight increase
 };
 
 let BM = { targetId:null, targetDay:null, filter:'all', selectedId:null, sessionId:null, openDescId:null };
@@ -2128,6 +2129,11 @@ function timerCardHTML() {
 function shouldSuggestWeightUp(exId, excludeId) {
   // Only look at sessions still in history (respects deletions), exclude current session
   const hist = getExerciseHistory(exId).filter(h => h.id !== excludeId);
+  // Manual flag: suggest based on last logged weight
+  if (S.flaggedForIncrease?.[exId]) {
+    const lastW = hist.length ? parseFloat(hist[hist.length-1].exercises[exId]?.[0]?.weight)||0 : 0;
+    if (lastW > 0) return lastW;
+  }
   if (hist.length < 3) return null;
   const recent = hist.slice(-3);
   const weights = recent.map(s => parseFloat(s.exercises[exId]?.[0]?.weight)||0);
@@ -2151,8 +2157,9 @@ function workoutCardHTML(exId, day, lastSession) {
     : '';
 
   const suggestW = shouldSuggestWeightUp(exId);
+  const isFlagged = !!S.flaggedForIncrease?.[exId];
   const suggestHTML = suggestW && !isDone
-    ? `<div class="wk-suggest">⬆ Consider moving up from ${suggestW}lb — you've hit 3 sessions at ≥8 reps</div>`
+    ? `<div class="wk-suggest">${isFlagged ? '⬆ Flagged for weight increase next session' : `⬆ Consider moving up from ${suggestW}lb — you've hit 3 sessions at ≥8 reps`}</div>`
     : '';
 
   const caliLink = ex.caliUrl
@@ -2167,6 +2174,7 @@ function workoutCardHTML(exId, day, lastSession) {
         </button>
         <div class="wk-card-name">${ex.name}${caliLink}</div>
         ${isDone ? '' : `<div class="card-actions">
+          <button class="icon-btn ${isFlagged ? 'flagged' : ''}" onclick="toggleFlagIncrease('${exId}')" title="${isFlagged ? 'Remove flag' : 'Flag for weight increase next session'}" style="${isFlagged ? 'color:var(--orange);border-color:var(--orange)' : ''}">⬆</button>
           <button class="icon-btn swap"   onclick="openBankModal('${exId}','${day}')"  title="Swap">${svg(ICO.swap)}</button>
           <button class="icon-btn danger" onclick="removeFromWorkout('${exId}')" title="Remove">${svg(ICO.close)}</button>
         </div>`}
@@ -2203,6 +2211,17 @@ function removeFromWorkout(exId) {
   renderWorkoutCards();
 }
 
+function toggleFlagIncrease(exId) {
+  if (!S.flaggedForIncrease) S.flaggedForIncrease = {};
+  S.flaggedForIncrease[exId] = !S.flaggedForIncrease[exId];
+  if (!S.flaggedForIncrease[exId]) delete S.flaggedForIncrease[exId];
+  save();
+  const last = getLastSession(WK.day);
+  const card = document.querySelector(`#wk-scroll .wk-card[data-id="${exId}"]`);
+  if (card) card.outerHTML = workoutCardHTML(exId, WK.day, last);
+  showToast(S.flaggedForIncrease?.[exId] ? 'Flagged for increase next session' : 'Flag removed', 'success');
+}
+
 function finishWorkout() {
   const day = WK.day;
   const elapsed = WK.pausedElapsed + (WK.paused ? 0 : Math.floor((Date.now() - WK.startTime) / 1000));
@@ -2219,6 +2238,18 @@ function finishWorkout() {
   });
 
   if (!Object.keys(logged).length) { showToast('Enter weight/reps before finishing','error'); clearInterval(WK.timerInterval); WK.timerInterval = setInterval(tickTimer,1000); return; }
+
+  // Clear manual increase flags for exercises where the user logged a heavier weight
+  if (S.flaggedForIncrease) {
+    const prevSessions = S.history;
+    Object.keys(logged).forEach(exId => {
+      if (!S.flaggedForIncrease[exId]) return;
+      const prev = prevSessions.filter(h => h.exercises[exId]).slice(-1)[0];
+      const prevW = prev ? parseFloat(prev.exercises[exId]?.[0]?.weight)||0 : 0;
+      const newW  = parseFloat(logged[exId]?.[0]?.weight)||0;
+      if (newW > prevW) delete S.flaggedForIncrease[exId];
+    });
+  }
 
   // Save to history
   S.history.push({ id: Date.now().toString(), day, date: today(), exercises: logged, duration: elapsed });
