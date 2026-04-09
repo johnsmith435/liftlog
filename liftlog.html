@@ -607,8 +607,16 @@ function save() {
 const WK_KEY = 'liftlog_wk';
 function saveWK() {
   if (!WK.day) { localStorage.removeItem(WK_KEY); return; }
-  const elapsed = WK.pausedElapsed + (WK.paused ? 0 : Math.floor((Date.now() - WK.startTime) / 1000));
-  try { localStorage.setItem(WK_KEY, JSON.stringify({ day: WK.day, elapsed, done: WK.done, paused: WK.paused })); } catch(e) {}
+  // Store absolute startTime so wall-clock time accumulates even when app is closed
+  try { localStorage.setItem(WK_KEY, JSON.stringify({
+    day: WK.day,
+    startTime: WK.startTime,
+    pausedElapsed: WK.paused
+      ? WK.pausedElapsed + Math.floor((Date.now() - WK.startTime) / 1000)
+      : WK.pausedElapsed,
+    paused: WK.paused,
+    done: WK.done
+  })); } catch(e) {}
 }
 function clearWK() { localStorage.removeItem(WK_KEY); }
 
@@ -2481,16 +2489,18 @@ try {
   if (wkRaw) {
     const saved = JSON.parse(wkRaw);
     if (saved.day && S.split[saved.day]) {
-      WK.day = saved.day;
-      WK.done = saved.done || {};
-      WK.paused = true; // treat as paused so elapsed doesn't drift while restoring
-      WK.pausedElapsed = saved.elapsed || 0;
-      WK.startTime = Date.now();
+      WK.day          = saved.day;
+      WK.done         = saved.done || {};
+      WK.pausedElapsed = saved.pausedElapsed || 0;
+      WK.paused       = !!saved.paused;
+      // Use saved absolute startTime so timer includes time app was closed
+      WK.startTime    = saved.startTime || Date.now();
       resumeWorkoutUI(saved.day);
-      // Show paused state visually
-      document.getElementById('wk-pause-icon') && (document.getElementById('wk-pause-icon').innerHTML = svg(ICO.play, 13));
-      document.getElementById('wk-pause-label') && (document.getElementById('wk-pause-label').textContent = 'Resume');
-      document.getElementById('wk-paused-label') && (document.getElementById('wk-paused-label').style.display = 'block');
+      if (WK.paused) {
+        document.getElementById('wk-pause-icon') && (document.getElementById('wk-pause-icon').innerHTML = svg(ICO.play, 13));
+        document.getElementById('wk-pause-label') && (document.getElementById('wk-pause-label').textContent = 'Resume');
+        document.getElementById('wk-paused-label') && (document.getElementById('wk-paused-label').style.display = 'block');
+      }
     }
   }
 } catch(e) {}
