@@ -2269,13 +2269,15 @@ function importHealthData(histId) {
         const rawTimeline = h.hrTimeline || h.hr_timeline || h.heartRateTimeline || h.heartrate_timeline || null;
         const hrTimeline = Array.isArray(rawTimeline) ? rawTimeline.map(Number).filter(n => !isNaN(n)) : null;
 
+        // Store null for zero values so UI shows — instead of 0
+        const nonZero = (v) => (v != null && v !== '' && Number(v) !== 0) ? Math.round(v) : null;
         session.healthData = {
-          activeCalories: activeCal   != null ? Math.round(activeCal)   : null,
-          totalCalories:  totalCal    != null ? Math.round(totalCal)    : null,
-          avgHeartRate:   avgHR       != null ? Math.round(avgHR)       : null,
-          peakHeartRate:  peakHR      != null ? Math.round(peakHR)      : null,
-          hrv:            hrv         != null ? Math.round(hrv)         : null,
-          workoutMinutes: workoutMins  != null ? Math.round(workoutMins) : null,
+          activeCalories: nonZero(activeCal),
+          totalCalories:  nonZero(totalCal),
+          avgHeartRate:   nonZero(avgHR),
+          peakHeartRate:  nonZero(peakHR),
+          hrv:            nonZero(hrv),
+          workoutMinutes: workoutMins != null && workoutMins !== '' ? Math.round(workoutMins) : null,
           hrTimeline:     hrTimeline  || null,
           startTime:      startTime   ? String(startTime) : null,
         };
