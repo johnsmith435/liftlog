@@ -2235,6 +2235,8 @@ function toggleFlagIncrease(exId) {
   const last = getLastSession(WK.day);
   const card = document.querySelector(`#wk-scroll .wk-card[data-id="${exId}"]`);
   if (card) card.outerHTML = workoutCardHTML(exId, WK.day, last);
+  const homeCard = document.querySelector(`.exercise-card[data-id="${exId}"]`);
+  if (homeCard) homeCard.outerHTML = cardHTML(exId, WK.day, last);
   showToast(flagged ? 'Flagged for increase next session' : 'Flag removed', 'success');
 }
 
