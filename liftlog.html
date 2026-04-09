@@ -1,4 +1,4 @@
-<!-- LiftLog v5 -->
+<!-- LiftLog v6 -->
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -346,7 +346,7 @@
 
 <div style="position:sticky;top:0;z-index:20;background:var(--bg)">
 <div class="header">
-  <div class="logo">Lift<span>Log</span> <span style="font-size:10px;color:var(--muted);font-weight:400">v5</span></div>
+  <div class="logo">Lift<span>Log</span> <span style="font-size:10px;color:var(--muted);font-weight:400">v6</span></div>
   <div style="display:flex;align-items:center;gap:10px">
     <div class="header-date" id="header-date"></div>
     <button class="theme-toggle" id="theme-toggle" onclick="toggleTheme()" title="Toggle light/dark mode">🌙</button>
@@ -2375,10 +2375,10 @@ function renderSummaryBody() {
           <div class="health-stat-val">${health.activeCalories ?? '—'}</div>
           <div class="health-stat-lbl">Active Cal</div>
         </div>
-        <div class="health-stat">
-          <div class="health-stat-val">${health.totalCalories ?? '—'}</div>
+        ${health.totalCalories != null ? `<div class="health-stat">
+          <div class="health-stat-val">${health.totalCalories}</div>
           <div class="health-stat-lbl">Total Cal</div>
-        </div>
+        </div>` : ''}
         <div class="health-stat">
           <div class="health-stat-val">${health.avgHeartRate ?? '—'}</div>
           <div class="health-stat-lbl">Avg HR</div>

@@ -1,4 +1,4 @@
-const CACHE = 'liftlog-v5';
+const CACHE = 'liftlog-v6';
 const CDN_ASSETS = [
   'https://cdn.jsdelivr.net/npm/sortablejs@1.15.0/Sortable.min.js',
   'https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js',
