@@ -1036,11 +1036,6 @@ function sessionFooterHTML(session, editing) {
     </div>`;
   return `
     <div class="session-footer">
-      <div class="session-date-edit">
-        <span style="font-size:11px;color:var(--muted)">Date:</span>
-        <input class="date-input-inline" type="date" id="date-edit-${session.id}" value="${session.date}">
-        <button class="btn-save-date" onclick="saveSessionDate('${session.id}')">Save</button>
-      </div>
       <div style="display:flex;gap:6px;align-items:center">
         <button class="btn-save-date" onclick="startSessionEdit('${session.id}')">Edit</button>
         <button class="btn-save-date" onclick="viewSessionSummary('${session.id}')">Summary</button>
