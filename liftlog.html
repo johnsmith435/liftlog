@@ -566,6 +566,7 @@ let S = {
 };
 
 let BM = { targetId:null, targetDay:null, filter:'all', selectedId:null, sessionId:null, openDescId:null };
+let expandedCards = {}; // exId+day → true when showing per-set rows
 let charts = {};
 let openSessions = {};
 let openDescs = {};
@@ -823,10 +824,7 @@ function cardHTML(exId, day, lastSession) {
       </div>
       ${descHTML}
       ${prevHTML}
-      <div class="card-body">
-        ${setsRowsHTML(sessionSets, exId, day)}
-        <button class="add-set-btn" onclick="addSet('${exId}','${day}')">+ Add Set</button>
-      </div>
+      <div class="card-body">${cardBodyHTML(sessionSets, exId, day)}</div>
     </div>`;
 }
 
@@ -844,58 +842,125 @@ function toggleDesc(exId, day) {
 }
 
 // ── Session entry helpers ──────────────────────────────────────────────────
-function setsRowsHTML(sets, exId, day) {
-  return sets.map((s, i) => `
-    <div class="set-row">
-      <div class="set-row-label">Set ${i + 1}</div>
+function cardBodyHTML(sets, exId, day) {
+  const key = exId + day;
+  const expanded = !!expandedCards[key];
+  if (expanded) {
+    const rows = sets.map((s, i) => `
+      <div class="set-row">
+        <div class="set-row-label">Set ${i + 1}</div>
+        <div class="set-field">
+          <div class="set-field-label">Weight (lbs)</div>
+          <input class="set-input" type="number" min="0" step="2.5" inputmode="decimal"
+            placeholder="0" value="${s.weight}"
+            onchange="updateSetEntry('${exId}','${day}',${i},'weight',this.value)">
+        </div>
+        <div class="set-field">
+          <div class="set-field-label">Reps</div>
+          <input class="set-input" type="number" min="1" step="1" inputmode="numeric"
+            placeholder="0" value="${s.reps}"
+            onchange="updateSetEntry('${exId}','${day}',${i},'reps',this.value)">
+        </div>
+        ${sets.length > 1 ? `<button class="remove-set-btn" onclick="removeSet('${exId}','${day}',${i})" title="Remove set">−</button>` : ''}
+      </div>`).join('');
+    return rows + `<button class="add-set-btn" onclick="addSet('${exId}','${day}')">+ Add Set</button>
+      <button class="add-set-btn" style="margin-top:4px;border-style:solid;color:var(--muted)" onclick="collapseCard('${exId}','${day}')">Collapse</button>`;
+  }
+  // Collapsed: single weight/reps + sets counter
+  const w = sets[0]?.weight ?? '';
+  const r = sets[0]?.reps ?? '';
+  const n = sets.length;
+  return `
+    <div class="set-row" style="align-items:flex-end">
       <div class="set-field">
         <div class="set-field-label">Weight (lbs)</div>
         <input class="set-input" type="number" min="0" step="2.5" inputmode="decimal"
-          placeholder="0" value="${s.weight}"
-          onchange="updateEntry('${exId}','${day}',${i},'weight',this.value)">
+          placeholder="0" value="${w}"
+          onchange="updateEntry('${exId}','${day}','weight',this.value)">
       </div>
       <div class="set-field">
         <div class="set-field-label">Reps</div>
         <input class="set-input" type="number" min="1" step="1" inputmode="numeric"
-          placeholder="0" value="${s.reps}"
-          onchange="updateEntry('${exId}','${day}',${i},'reps',this.value)">
+          placeholder="0" value="${r}"
+          onchange="updateEntry('${exId}','${day}','reps',this.value)">
       </div>
-      ${sets.length > 1 ? `<button class="remove-set-btn" onclick="removeSet('${exId}','${day}',${i})" title="Remove set">−</button>` : ''}
-    </div>`).join('');
+      <div class="sets-counter">
+        <div class="sets-counter-label">Sets</div>
+        <div class="sets-counter-control">
+          <button class="sets-counter-btn" onclick="changeSetCount('${exId}','${day}',-1)">−</button>
+          <div class="sets-counter-val" id="sets-count-${exId}-${day}">${n}</div>
+          <button class="sets-counter-btn" onclick="changeSetCount('${exId}','${day}',+1)">+</button>
+        </div>
+      </div>
+    </div>
+    <button class="add-set-btn" style="margin-top:6px" onclick="expandCard('${exId}','${day}')">Edit sets individually</button>`;
 }
 
-function updateEntry(exId, day, setIdx, field, val) {
+function refreshCardBody(exId, day) {
+  const sets = S.session[day][exId];
+  const html = cardBodyHTML(sets, exId, day);
+  const card = document.querySelector(`.exercise-card[data-id="${exId}"], .wk-card[data-id="${exId}"]`);
+  if (card) {
+    const body = card.querySelector('.card-body, .wk-card-body');
+    if (body) body.innerHTML = html;
+  }
+}
+
+function expandCard(exId, day) {
+  expandedCards[exId + day] = true;
+  refreshCardBody(exId, day);
+}
+
+function collapseCard(exId, day) {
+  expandedCards[exId + day] = false;
+  refreshCardBody(exId, day);
+}
+
+// Collapsed mode: update all sets to the same weight/reps
+function updateEntry(exId, day, field, val) {
   if (!S.session[day][exId]) S.session[day][exId] = getDefaultEntry(exId, day);
   S.session[day][exId] = migrateEntry(S.session[day][exId]);
-  S.session[day][exId][setIdx][field] = val === '' ? '' : parseFloat(val) || val;
+  const parsed = val === '' ? '' : parseFloat(val) || val;
+  S.session[day][exId].forEach(s => s[field] = parsed);
+  save();
+}
+
+function changeSetCount(exId, day, delta) {
+  if (!S.session[day][exId]) S.session[day][exId] = getDefaultEntry(exId, day);
+  S.session[day][exId] = migrateEntry(S.session[day][exId]);
+  const sets = S.session[day][exId];
+  const next = Math.max(1, Math.min(20, sets.length + delta));
+  if (delta > 0) {
+    const last = sets.slice(-1)[0] || { weight: '', reps: '' };
+    sets.push({ weight: last.weight, reps: last.reps });
+  } else if (delta < 0) {
+    sets.pop();
+  }
+  save();
+  const el = document.getElementById(`sets-count-${exId}-${day}`);
+  if (el) el.textContent = next;
+}
+
+// Expanded mode: update individual set
+function updateSetEntry(exId, day, idx, field, val) {
+  if (!S.session[day][exId]) S.session[day][exId] = getDefaultEntry(exId, day);
+  S.session[day][exId][idx][field] = val === '' ? '' : parseFloat(val) || val;
   save();
 }
 
 function addSet(exId, day) {
   if (!S.session[day][exId]) S.session[day][exId] = getDefaultEntry(exId, day);
-  S.session[day][exId] = migrateEntry(S.session[day][exId]);
   const last = S.session[day][exId].slice(-1)[0] || { weight: '', reps: '' };
   S.session[day][exId].push({ weight: last.weight, reps: last.reps });
   save();
-  // Re-render card body only
-  const card = document.querySelector(`.exercise-card[data-id="${exId}"], .wk-card[data-id="${exId}"]`);
-  if (card) {
-    const body = card.querySelector('.card-body, .wk-card-body');
-    if (body) body.innerHTML = setsRowsHTML(S.session[day][exId], exId, day) +
-      `<button class="add-set-btn" onclick="addSet('${exId}','${day}')">+ Add Set</button>`;
-  }
+  refreshCardBody(exId, day);
 }
 
 function removeSet(exId, day, idx) {
   if (!S.session[day][exId] || S.session[day][exId].length <= 1) return;
   S.session[day][exId].splice(idx, 1);
   save();
-  const card = document.querySelector(`.exercise-card[data-id="${exId}"], .wk-card[data-id="${exId}"]`);
-  if (card) {
-    const body = card.querySelector('.card-body, .wk-card-body');
-    if (body) body.innerHTML = setsRowsHTML(S.session[day][exId], exId, day) +
-      `<button class="add-set-btn" onclick="addSet('${exId}','${day}')">+ Add Set</button>`;
-  }
+  refreshCardBody(exId, day);
 }
 
 // ── Day actions ────────────────────────────────────────────────────────────
@@ -1946,10 +2011,7 @@ function workoutCardHTML(exId, day, lastSession) {
         </div>`}
       </div>
       ${prevHTML}${suggestHTML}
-      <div class="wk-card-body">
-        ${setsRowsHTML(sessionSets, exId, day)}
-        ${isDone ? '' : `<button class="add-set-btn" onclick="addSet('${exId}','${day}')">+ Add Set</button>`}
-      </div>
+      <div class="wk-card-body">${isDone ? '' : cardBodyHTML(sessionSets, exId, day)}</div>
     </div>`;
 }
 
