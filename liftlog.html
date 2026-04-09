@@ -2404,27 +2404,7 @@ function renderSummaryBody() {
         <div class="health-card-title">${heartSVG} Heart Rate Timeline</div>
       </div>
       <canvas id="hr-chart-${histId}" height="90"></canvas>
-    </div>
-    <script>
-      (function() {
-        const canvas = document.getElementById('hr-chart-${histId}');
-        if (!canvas) return;
-        const data   = ${JSON.stringify(health.hrTimeline)};
-        const labels = ${JSON.stringify(
-          health.hrTimelineLabels?.length
-            ? health.hrTimelineLabels
-            : (() => { const m = health.workoutMinutes || 0; return data.map((_, i) => m ? Math.round(i * m / (data.length - 1)) + 'm' : String(i)); })()
-        )};
-        new Chart(canvas.getContext('2d'), {
-          type: 'line',
-          data: {
-            labels,
-            datasets: [{ data, borderColor: '#f87171', backgroundColor: 'rgba(248,113,113,0.12)', fill: true, tension: 0.4, pointRadius: 0, borderWidth: 2 }]
-          },
-          options: { responsive: true, plugins: { legend: { display: false }, tooltip: { callbacks: { label: c => c.parsed.y + ' bpm' } } }, scales: { x: { grid: { color: 'rgba(255,255,255,0.05)' }, ticks: { color: '#4b5563', maxTicksLimit: 8 } }, y: { grid: { color: 'rgba(255,255,255,0.05)' }, ticks: { color: '#4b5563' } } } }
-        });
-      })();
-    <\/script>` : '';
+    </div>` : '';
 
   // Per-exercise breakdown
   const exRows = exIds.map(exId => {
@@ -2466,6 +2446,35 @@ function renderSummaryBody() {
       <div class="summary-section-title">Exercise Breakdown</div>
       ${exRows}
     </div>`;
+
+  // Init HR chart after innerHTML (scripts inside innerHTML don't execute)
+  if (health?.hrTimeline?.length > 1) {
+    const canvas = document.getElementById(`hr-chart-${histId}`);
+    if (canvas) {
+      const hrData = health.hrTimeline;
+      const hrLabels = health.hrTimelineLabels?.length
+        ? health.hrTimelineLabels
+        : hrData.map((_, i) => {
+            const m = health.workoutMinutes || 0;
+            return m ? Math.round(i * m / (hrData.length - 1)) + 'm' : String(i);
+          });
+      new Chart(canvas.getContext('2d'), {
+        type: 'line',
+        data: {
+          labels: hrLabels,
+          datasets: [{ data: hrData, borderColor: '#f87171', backgroundColor: 'rgba(248,113,113,0.12)', fill: true, tension: 0.4, pointRadius: 0, borderWidth: 2 }]
+        },
+        options: {
+          responsive: true,
+          plugins: { legend: { display: false }, tooltip: { callbacks: { label: c => c.parsed.y + ' bpm' } } },
+          scales: {
+            x: { grid: { color: 'rgba(255,255,255,0.05)' }, ticks: { color: '#4b5563', maxTicksLimit: 8 } },
+            y: { grid: { color: 'rgba(255,255,255,0.05)' }, ticks: { color: '#4b5563' } }
+          }
+        }
+      });
+    }
+  }
 }
 
 function importHealthData(histId) {
