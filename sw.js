@@ -1,4 +1,4 @@
-const CACHE = 'liftlog-v4';
+const CACHE = 'liftlog-v5';
 const CDN_ASSETS = [
   'https://cdn.jsdelivr.net/npm/sortablejs@1.15.0/Sortable.min.js',
   'https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js',
@@ -9,7 +9,12 @@ self.addEventListener('install', e => {
   e.waitUntil(
     caches.open(CACHE).then(cache => cache.addAll(CDN_ASSETS))
   );
-  self.skipWaiting();
+  // Don't skipWaiting here — wait for the app to signal readiness
+});
+
+// Allow app to trigger SW activation immediately
+self.addEventListener('message', e => {
+  if (e.data?.type === 'SKIP_WAITING') self.skipWaiting();
 });
 
 // Activate: drop old caches

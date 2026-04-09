@@ -1,4 +1,4 @@
-<!-- LiftLog v4 -->
+<!-- LiftLog v5 -->
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -346,7 +346,7 @@
 
 <div style="position:sticky;top:0;z-index:20;background:var(--bg)">
 <div class="header">
-  <div class="logo">Lift<span>Log</span> <span style="font-size:10px;color:var(--muted);font-weight:400">v4</span></div>
+  <div class="logo">Lift<span>Log</span> <span style="font-size:10px;color:var(--muted);font-weight:400">v5</span></div>
   <div style="display:flex;align-items:center;gap:10px">
     <div class="header-date" id="header-date"></div>
     <button class="theme-toggle" id="theme-toggle" onclick="toggleTheme()" title="Toggle light/dark mode">🌙</button>
@@ -395,14 +395,29 @@
 <!-- Active Workout Overlay -->
 <div class="workout-overlay" id="workout-overlay" style="display:none">
   <div class="workout-overlay-header">
-    <button class="btn btn-ghost" style="padding:6px 12px;font-size:12px" onclick="cancelWorkout()">✕ Cancel</button>
+    <button class="btn btn-ghost" style="padding:6px 14px;font-size:12px;gap:4px" id="wk-minimize-btn">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
+      Hide
+    </button>
     <div class="workout-title" id="wk-title"></div>
     <div style="width:72px"></div>
   </div>
   <div class="workout-scroll" id="wk-scroll"></div>
   <div class="workout-footer">
+    <button class="btn btn-ghost" style="flex:0 0 auto;color:var(--danger);border-color:var(--danger)" onclick="cancelWorkout()">✕</button>
     <button class="btn btn-ghost" style="flex:0 0 auto" onclick="openBankModal(null, WK.day)">+ Add</button>
     <button class="btn btn-primary" style="flex:1" onclick="finishWorkout()">Finish &amp; Log</button>
+  </div>
+</div>
+
+<!-- Return-to-workout banner (shown when workout is minimized) -->
+<div id="wk-banner" style="display:none;position:fixed;bottom:0;left:0;right:0;z-index:199;padding:10px 16px;padding-bottom:max(10px,env(safe-area-inset-bottom));background:var(--primary);cursor:pointer;display:none" onclick="maximizeWorkout()">
+  <div style="display:flex;align-items:center;justify-content:space-between;max-width:860px;margin:0 auto">
+    <div style="display:flex;align-items:center;gap:10px">
+      <div style="font-size:13px;font-weight:700;color:#fff" id="wk-banner-title"></div>
+      <div style="font-size:13px;font-family:monospace;color:rgba(255,255,255,0.85)" id="wk-banner-timer"></div>
+    </div>
+    <div style="font-size:12px;color:rgba(255,255,255,0.8);font-weight:600">Tap to return ↑</div>
   </div>
 </div>
 
@@ -2004,14 +2019,36 @@ function resumeWorkoutUI(day) {
   clearInterval(WK.timerInterval);
   WK.timerInterval = setInterval(tickTimer, 1000);
   BM.targetDay = day;
+  // Wire minimize button with both click and touchend for iOS reliability
+  const minBtn = document.getElementById('wk-minimize-btn');
+  if (minBtn) {
+    minBtn.onclick = minimizeWorkout;
+    minBtn.ontouchend = function(e) { e.preventDefault(); minimizeWorkout(); };
+  }
 }
 
 function tickTimer() {
   if (WK.paused) return;
   const elapsed = WK.pausedElapsed + Math.floor((Date.now() - WK.startTime) / 1000);
   const m = Math.floor(elapsed / 60), s = elapsed % 60;
+  const timeStr = `${m}:${s.toString().padStart(2,'0')}`;
   const el = document.getElementById('wk-timer');
-  if (el) el.textContent = `${m}:${s.toString().padStart(2,'0')}`;
+  if (el) el.textContent = timeStr;
+  const bannerTimer = document.getElementById('wk-banner-timer');
+  if (bannerTimer) bannerTimer.textContent = timeStr;
+}
+
+function minimizeWorkout() {
+  document.getElementById('workout-overlay').style.display = 'none';
+  const banner = document.getElementById('wk-banner');
+  banner.style.display = 'block';
+  document.getElementById('wk-banner-title').textContent = document.getElementById('wk-title').textContent;
+  tickTimer();
+}
+
+function maximizeWorkout() {
+  document.getElementById('wk-banner').style.display = 'none';
+  document.getElementById('workout-overlay').style.display = 'flex';
 }
 
 function togglePauseWorkout() {
@@ -2036,6 +2073,7 @@ function cancelWorkout() {
   clearInterval(WK.timerInterval);
   clearWK();
   document.getElementById('workout-overlay').style.display = 'none';
+  document.getElementById('wk-banner').style.display = 'none';
   WK = { day: null, startTime: null, timerInterval: null, done: {}, paused: false, pausedElapsed: 0 };
 }
 
@@ -2183,8 +2221,9 @@ function finishWorkout() {
   clearWK();
   save();
 
-  // Hide workout overlay
+  // Hide workout overlay and banner
   document.getElementById('workout-overlay').style.display = 'none';
+  document.getElementById('wk-banner').style.display = 'none';
   WK = { day: null, startTime: null, timerInterval: null, done: {}, paused: false, pausedElapsed: 0 };
 
   // Show summary
@@ -2467,7 +2506,19 @@ document.getElementById('header-date').textContent =
 
 // Register service worker for PWA / offline support
 if ('serviceWorker' in navigator) {
-  navigator.serviceWorker.register('./sw.js?v=4').catch(() => {});
+  navigator.serviceWorker.register('./sw.js?v=5').then(reg => {
+    // When a new SW is waiting, skip waiting and reload to apply update immediately
+    reg.addEventListener('updatefound', () => {
+      const newWorker = reg.installing;
+      newWorker.addEventListener('statechange', () => {
+        if (newWorker.state === 'installed' && navigator.serviceWorker.controller) {
+          newWorker.postMessage({ type: 'SKIP_WAITING' });
+        }
+      });
+    });
+  }).catch(() => {});
+  // Reload when the new SW takes control
+  navigator.serviceWorker.addEventListener('controllerchange', () => window.location.reload());
 }
 
 // ── Theme ──────────────────────────────────────────────────────────────────
@@ -2488,6 +2539,9 @@ applyTheme(localStorage.getItem('liftlog_theme') || 'dark');
 
 loadState();
 render();
+
+// Banner tap to maximize — wire ontouchend for iOS reliability
+document.getElementById('wk-banner').ontouchend = function(e) { e.preventDefault(); maximizeWorkout(); };
 
 // Restore in-progress workout if app was closed mid-session
 try {
