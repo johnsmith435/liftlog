@@ -2375,10 +2375,6 @@ function renderSummaryBody() {
           <div class="health-stat-val">${health.activeCalories ?? '—'}</div>
           <div class="health-stat-lbl">Active Cal</div>
         </div>
-        ${health.totalCalories != null ? `<div class="health-stat">
-          <div class="health-stat-val">${health.totalCalories}</div>
-          <div class="health-stat-lbl">Total Cal</div>
-        </div>` : ''}
         <div class="health-stat">
           <div class="health-stat-val">${health.avgHeartRate ?? '—'}</div>
           <div class="health-stat-lbl">Avg HR</div>
@@ -2387,6 +2383,10 @@ function renderSummaryBody() {
           <div class="health-stat-val">${health.peakHeartRate ?? '—'}</div>
           <div class="health-stat-lbl">Peak HR</div>
         </div>
+        ${health.intensity != null ? `<div class="health-stat">
+          <div class="health-stat-val">${health.intensity}</div>
+          <div class="health-stat-lbl">Intensity</div>
+        </div>` : ''}
         ${health.hrv != null ? `<div class="health-stat">
           <div class="health-stat-val">${health.hrv}</div>
           <div class="health-stat-lbl">HRV (ms)</div>
@@ -2490,7 +2490,7 @@ function importHealthData(histId) {
         // ── Health Auto Export format ──
         // { data: { workouts: [{ activeEnergyBurned, heartRate, heartRateData, duration, start, avgHeartRate, maxHeartRate }],
         //           metrics: [{ name, data: [{ qty }] }] } }
-        let activeCal, totalCal, avgHR, peakHR, startTime, durationSecs, hrv, hrTimeline = null, hrTimelineLabels = null;
+        let activeCal, totalCal, avgHR, peakHR, startTime, durationSecs, hrv, intensity, hrTimeline = null, hrTimelineLabels = null;
 
         // Detect Health Auto Export: data.data.workouts
         const haeData = data.data || data;
@@ -2515,6 +2515,7 @@ function importHealthData(histId) {
           peakHR       = w.heartRate?.max?.qty ?? w.maxHeartRate?.qty ?? null;
           startTime    = w.start ?? null;
           durationSecs = w.duration ?? null;
+          intensity    = w.intensity?.qty ?? null;
           // totalCal omitted: HAE metrics only provide daily basal (~1400 kcal), not workout-scoped basal
 
           // HRV from daily metrics
@@ -2571,6 +2572,7 @@ function importHealthData(histId) {
           avgHeartRate:      nonZero(avgHR),
           peakHeartRate:     nonZero(peakHR),
           hrv:               hrv != null ? Math.round(hrv * 10) / 10 : null,
+          intensity:         intensity != null ? Math.round(intensity * 10) / 10 : null,
           workoutMinutes:    workoutMins,
           hrTimeline:        hrTimeline?.length > 1 ? hrTimeline : null,
           hrTimelineLabels:  hrTimelineLabels?.length > 1 ? hrTimelineLabels : null,
@@ -2645,18 +2647,15 @@ function shareWorkoutCard() {
     prs.length ? { val: prs.length, lbl: prs.length === 1 ? 'PR' : 'PRs' } : null,
   ].filter(Boolean);
 
-  const hCalRow = health ? [
-    health.activeCalories != null ? { val: health.activeCalories, lbl: 'Active Cal' } : null,
-    health.totalCalories  != null ? { val: health.totalCalories,  lbl: 'Total Cal'  } : null,
+  const hRow = health ? [
+    health.activeCalories != null ? { val: health.activeCalories, lbl: 'Active Cal'  } : null,
+    health.avgHeartRate   != null ? { val: health.avgHeartRate,   lbl: 'Avg HR'      } : null,
+    health.peakHeartRate  != null ? { val: health.peakHeartRate,  lbl: 'Peak HR'     } : null,
+    health.intensity      != null ? { val: health.intensity,      lbl: 'Intensity'   } : null,
+    health.hrv            != null ? { val: health.hrv,            lbl: 'HRV (ms)'    } : null,
   ].filter(Boolean) : [];
 
-  const hHRRow = health ? [
-    health.avgHeartRate  != null ? { val: health.avgHeartRate,  lbl: 'Avg HR'   } : null,
-    health.peakHeartRate != null ? { val: health.peakHeartRate, lbl: 'Peak HR'  } : null,
-    health.hrv           != null ? { val: health.hrv,           lbl: 'HRV (ms)' } : null,
-  ].filter(Boolean) : [];
-
-  const hRowCount = (hCalRow.length ? 1 : 0) + (hHRRow.length ? 1 : 0);
+  const hRowCount = hRow.length ? 1 : 0;
 
   const H = 44            // top padding
     + 32                  // LIFTLOG label
@@ -2664,7 +2663,7 @@ function shareWorkoutCard() {
     + 20                  // date
     + 28                  // gap before stat pills
     + PILL_H              // stat pills
-    + (hRowCount ? 32 + hRowCount * (PILL_H + GAP) : 0)  // health label + rows
+    + (hRowCount ? 32 + PILL_H + GAP : 0)                 // health label + row
     + (hasHRChart ? 36 + HR_CHART_H + GAP : 0)           // HR timeline chart
     + 44;                 // footer
 
@@ -2762,8 +2761,7 @@ function shareWorkoutCard() {
       y += PILL_H + GAP;
     }
 
-    if (hCalRow.length) drawHRow(hCalRow);
-    if (hHRRow.length)  drawHRow(hHRRow);
+    if (hRow.length) drawHRow(hRow);
   }
 
   // HR timeline chart
