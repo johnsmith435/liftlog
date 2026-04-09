@@ -777,6 +777,7 @@ const ICO = {
   ext:   '<path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/>',
   info:  '<circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/>',
   chev:  '<polyline points="6 9 12 15 18 9"/>',
+  arrowUp: '<line x1="12" y1="19" x2="12" y2="5"/><polyline points="5 12 12 5 19 12"/>',
   pause: '<rect x="6" y="4" width="4" height="16"/><rect x="14" y="4" width="4" height="16"/>',
   play:  '<polygon points="5 3 19 12 5 21 5 3"/>',
 };
@@ -862,6 +863,12 @@ function cardHTML(exId, day, lastSession) {
     ? `<button class="icon-btn ${isDescOpen?'is-active':''}" onclick="toggleDesc('${exId}','${day}')" title="About this exercise">${svg(ICO.info)}</button>`
     : '';
 
+  const isFlaggedHome = !!S.flaggedForIncrease?.[exId];
+  const suggestWHome = shouldSuggestWeightUp(exId);
+  const homeSuggestHTML = suggestWHome
+    ? `<div class="wk-suggest">${svg(ICO.arrowUp,11)} ${isFlaggedHome ? 'Flagged for weight increase next session' : `Consider moving up from ${suggestWHome}lb — you've hit 3 sessions at ≥8 reps`}</div>`
+    : '';
+
   return `
     <div class="exercise-card" data-id="${exId}">
       <div class="card-header">
@@ -869,11 +876,13 @@ function cardHTML(exId, day, lastSession) {
         <div class="card-name">${ex.name}${caliLink}</div>
         <div class="card-actions">
           ${infoBtn}
+          <button class="icon-btn" onclick="toggleFlagIncreaseHome('${exId}','${day}')" title="${isFlaggedHome ? 'Remove flag' : 'Flag for weight increase next session'}" style="${isFlaggedHome ? 'color:var(--orange);border-color:var(--orange)' : ''}">${svg(ICO.arrowUp)}</button>
           <button class="icon-btn swap"   onclick="openBankModal('${exId}','${day}')"  title="Swap exercise">${svg(ICO.swap)}</button>
           <button class="icon-btn danger" onclick="removeFromDay('${exId}','${day}')"  title="Remove">${svg(ICO.close)}</button>
         </div>
       </div>
       ${descHTML}
+      ${homeSuggestHTML}
       ${prevHTML}
       <div class="card-body">${cardBodyHTML(sessionSets, exId, day)}</div>
     </div>`;
@@ -1227,12 +1236,14 @@ function sessionBodyHTML(session, editing=false) {
 
     if (editing) {
       const bodyHtml = sessionEditCardBodyHTML(sets, session.id, exId);
+      const isFlaggedEdit = !!S.flaggedForIncrease?.[exId];
       return `
         <div class="session-ex-row" data-exid="${exId}">
           <div class="session-ex-header">
             <div class="drag-handle" style="margin-right:6px">${svg(ICO.drag,14)}</div>
             <div class="session-ex-name">${ex?ex.name:exId}</div>
-            <div style="display:flex;gap:5px">
+            <div style="display:flex;gap:5px;align-items:center">
+              <button class="icon-btn" onclick="toggleFlagIncreaseSession('${exId}','${session.id}')" title="${isFlaggedEdit ? 'Remove flag' : 'Flag for weight increase next session'}" style="width:24px;height:24px;${isFlaggedEdit ? 'color:var(--orange);border-color:var(--orange)' : ''}">${svg(ICO.arrowUp,11)}</button>
               <button class="btn-save-date" onclick="openSessionBankModal('${session.id}','${exId}')">Swap</button>
               <button class="btn-danger-sm" onclick="removeSessionExercise('${session.id}','${exId}')">Remove</button>
             </div>
@@ -2159,7 +2170,7 @@ function workoutCardHTML(exId, day, lastSession) {
   const suggestW = shouldSuggestWeightUp(exId);
   const isFlagged = !!S.flaggedForIncrease?.[exId];
   const suggestHTML = suggestW && !isDone
-    ? `<div class="wk-suggest">${isFlagged ? '⬆ Flagged for weight increase next session' : `⬆ Consider moving up from ${suggestW}lb — you've hit 3 sessions at ≥8 reps`}</div>`
+    ? `<div class="wk-suggest">${svg(ICO.arrowUp,11)} ${isFlagged ? 'Flagged for weight increase next session' : `Consider moving up from ${suggestW}lb — you've hit 3 sessions at ≥8 reps`}</div>`
     : '';
 
   const caliLink = ex.caliUrl
@@ -2174,7 +2185,7 @@ function workoutCardHTML(exId, day, lastSession) {
         </button>
         <div class="wk-card-name">${ex.name}${caliLink}</div>
         ${isDone ? '' : `<div class="card-actions">
-          <button class="icon-btn ${isFlagged ? 'flagged' : ''}" onclick="toggleFlagIncrease('${exId}')" title="${isFlagged ? 'Remove flag' : 'Flag for weight increase next session'}" style="${isFlagged ? 'color:var(--orange);border-color:var(--orange)' : ''}">⬆</button>
+          <button class="icon-btn" onclick="toggleFlagIncrease('${exId}')" title="${isFlagged ? 'Remove flag' : 'Flag for weight increase next session'}" style="${isFlagged ? 'color:var(--orange);border-color:var(--orange)' : ''}">${svg(ICO.arrowUp)}</button>
           <button class="icon-btn swap"   onclick="openBankModal('${exId}','${day}')"  title="Swap">${svg(ICO.swap)}</button>
           <button class="icon-btn danger" onclick="removeFromWorkout('${exId}')" title="Remove">${svg(ICO.close)}</button>
         </div>`}
@@ -2211,15 +2222,35 @@ function removeFromWorkout(exId) {
   renderWorkoutCards();
 }
 
-function toggleFlagIncrease(exId) {
+function _setFlag(exId) {
   if (!S.flaggedForIncrease) S.flaggedForIncrease = {};
   S.flaggedForIncrease[exId] = !S.flaggedForIncrease[exId];
   if (!S.flaggedForIncrease[exId]) delete S.flaggedForIncrease[exId];
   save();
+  return !!S.flaggedForIncrease?.[exId];
+}
+
+function toggleFlagIncrease(exId) {
+  const flagged = _setFlag(exId);
   const last = getLastSession(WK.day);
   const card = document.querySelector(`#wk-scroll .wk-card[data-id="${exId}"]`);
   if (card) card.outerHTML = workoutCardHTML(exId, WK.day, last);
-  showToast(S.flaggedForIncrease?.[exId] ? 'Flagged for increase next session' : 'Flag removed', 'success');
+  showToast(flagged ? 'Flagged for increase next session' : 'Flag removed', 'success');
+}
+
+function toggleFlagIncreaseHome(exId, day) {
+  const flagged = _setFlag(exId);
+  const last = getLastSession(day);
+  const card = document.querySelector(`.exercise-card[data-id="${exId}"]`);
+  if (card) card.outerHTML = cardHTML(exId, day, last);
+  showToast(flagged ? 'Flagged for increase next session' : 'Flag removed', 'success');
+}
+
+function toggleFlagIncreaseSession(exId, sessionId) {
+  const flagged = _setFlag(exId);
+  const session = S.history.find(h => h.id === sessionId);
+  if (session) setSessionView(sessionId, true);
+  showToast(flagged ? 'Flagged for increase next session' : 'Flag removed', 'success');
 }
 
 function finishWorkout() {
