@@ -100,12 +100,11 @@
     .prev-label { font-size: 10px; text-transform: uppercase; letter-spacing: 0.6px; color: var(--muted); flex-shrink: 0; }
     .prev-chip { background: var(--elevated); border: 1px solid var(--border); border-radius: 4px; padding: 1px 8px; font-size: 11px; font-family: 'SF Mono','Fira Code',ui-monospace,monospace; color: var(--muted-light); }
 
-    /* ── NEW compact set input ── */
+    /* ── Set rows ── */
     .card-body { padding: 14px; }
-    .set-control-row {
-      display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
-    }
-    .set-field { display: flex; flex-direction: column; gap: 4px; flex: 1; min-width: 80px; }
+    .set-row { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; }
+    .set-row-label { font-size: 10px; font-weight: 600; color: var(--muted); text-transform: uppercase; letter-spacing: 0.5px; width: 32px; flex-shrink: 0; }
+    .set-field { display: flex; flex-direction: column; gap: 4px; flex: 1; min-width: 70px; }
     .set-field-label { font-size: 10px; text-transform: uppercase; letter-spacing: 0.6px; color: var(--muted); }
     .set-input {
       background: var(--elevated); border: 1px solid var(--border); border-radius: var(--r-sm);
@@ -123,6 +122,10 @@
     .sets-counter-btn:hover { color: var(--text); background: rgba(255,255,255,0.05); }
     .sets-counter-val { min-width: 32px; text-align: center; font-size: 16px; font-weight: 600; font-family: 'SF Mono','Fira Code',ui-monospace,monospace; color: var(--text); padding: 0 4px; line-height: 38px; border-left: 1px solid var(--border); border-right: 1px solid var(--border); }
 
+    .remove-set-btn { width: 26px; height: 26px; border-radius: 50%; border: 1px solid var(--border); background: transparent; color: var(--muted); cursor: pointer; font-size: 16px; display: flex; align-items: center; justify-content: center; flex-shrink: 0; transition: all 0.15s; line-height: 1; }
+    .remove-set-btn:hover { border-color: var(--danger); color: var(--danger); background: rgba(248,113,113,0.1); }
+    .add-set-btn { width: 100%; margin-top: 4px; padding: 6px; background: transparent; border: 1px dashed var(--border); border-radius: var(--r-sm); color: var(--muted); font-size: 12px; cursor: pointer; transition: all 0.15s; }
+    .add-set-btn:hover { border-color: var(--primary); color: var(--primary); background: var(--primary-dim); }
     .workout-actions { display: flex; gap: 8px; margin-top: 20px; }
 
     /* Session history */
@@ -587,6 +590,12 @@ function loadState() {
     const saved = JSON.parse(raw);
     S = { ...S, ...saved };
     S.bank = { ...DEFAULT_BANK, ...(saved.bank||{}) };
+    // Migrate session entries from old { weight, reps, sets } to array format
+    ['push','pull','legs','arms'].forEach(day => {
+      Object.keys(S.session[day]||{}).forEach(exId => {
+        S.session[day][exId] = migrateEntry(S.session[day][exId]);
+      });
+    });
   } catch(e) { console.error(e); }
 }
 function save() {
@@ -652,7 +661,14 @@ function getPR(exId) {
 }
 function getDefaultEntry(exId, day) {
   const d = DEFAULT_ENTRY[day]?.[exId];
-  return d ? { weight: d.weight, reps: d.reps, sets: d.sets } : { weight:'', reps:'', sets:3 };
+  const w = d?.weight ?? '', r = d?.reps ?? '', n = d?.sets ?? 3;
+  return Array.from({ length: n }, () => ({ weight: w, reps: r }));
+}
+// Migrate old { weight, reps, sets } format to array format
+function migrateEntry(entry) {
+  if (Array.isArray(entry)) return entry;
+  const n = parseInt(entry.sets) || 1;
+  return Array.from({ length: n }, () => ({ weight: entry.weight||'', reps: entry.reps||'' }));
 }
 function getWeekLabel(date) {
   const d = new Date(date+'T12:00:00');
@@ -762,10 +778,9 @@ function cardHTML(exId, day, lastSession) {
   if (!ex) return '';
 
   // Init session entry with defaults
-  if (!S.session[day][exId]) {
-    S.session[day][exId] = getDefaultEntry(exId, day);
-  }
-  const { weight, reps, sets } = S.session[day][exId];
+  if (!S.session[day][exId]) S.session[day][exId] = getDefaultEntry(exId, day);
+  S.session[day][exId] = migrateEntry(S.session[day][exId]);
+  const sessionSets = S.session[day][exId];
 
   // Previous session: summarise as "Nsets × Wlb × R reps"
   const prevSets = lastSession?.exercises?.[exId] || [];
@@ -809,28 +824,8 @@ function cardHTML(exId, day, lastSession) {
       ${descHTML}
       ${prevHTML}
       <div class="card-body">
-        <div class="set-control-row">
-          <div class="set-field">
-            <div class="set-field-label">Weight (lbs)</div>
-            <input class="set-input" type="number" min="0" step="2.5" inputmode="decimal"
-              placeholder="0" value="${weight}"
-              onchange="updateEntry('${exId}','${day}','weight',this.value)">
-          </div>
-          <div class="set-field">
-            <div class="set-field-label">Reps</div>
-            <input class="set-input" type="number" min="1" step="1" inputmode="numeric"
-              placeholder="0" value="${reps}"
-              onchange="updateEntry('${exId}','${day}','reps',this.value)">
-          </div>
-          <div class="sets-counter">
-            <div class="sets-counter-label">Sets</div>
-            <div class="sets-counter-control">
-              <button class="sets-counter-btn" onclick="changeSetCount('${exId}','${day}',-1)">−</button>
-              <div class="sets-counter-val" id="sets-count-${exId}-${day}">${sets}</div>
-              <button class="sets-counter-btn" onclick="changeSetCount('${exId}','${day}',+1)">+</button>
-            </div>
-          </div>
-        </div>
+        ${setsRowsHTML(sessionSets, exId, day)}
+        <button class="add-set-btn" onclick="addSet('${exId}','${day}')">+ Add Set</button>
       </div>
     </div>`;
 }
@@ -849,20 +844,58 @@ function toggleDesc(exId, day) {
 }
 
 // ── Session entry helpers ──────────────────────────────────────────────────
-function updateEntry(exId, day, field, val) {
+function setsRowsHTML(sets, exId, day) {
+  return sets.map((s, i) => `
+    <div class="set-row">
+      <div class="set-row-label">Set ${i + 1}</div>
+      <div class="set-field">
+        <div class="set-field-label">Weight (lbs)</div>
+        <input class="set-input" type="number" min="0" step="2.5" inputmode="decimal"
+          placeholder="0" value="${s.weight}"
+          onchange="updateEntry('${exId}','${day}',${i},'weight',this.value)">
+      </div>
+      <div class="set-field">
+        <div class="set-field-label">Reps</div>
+        <input class="set-input" type="number" min="1" step="1" inputmode="numeric"
+          placeholder="0" value="${s.reps}"
+          onchange="updateEntry('${exId}','${day}',${i},'reps',this.value)">
+      </div>
+      ${sets.length > 1 ? `<button class="remove-set-btn" onclick="removeSet('${exId}','${day}',${i})" title="Remove set">−</button>` : ''}
+    </div>`).join('');
+}
+
+function updateEntry(exId, day, setIdx, field, val) {
   if (!S.session[day][exId]) S.session[day][exId] = getDefaultEntry(exId, day);
-  S.session[day][exId][field] = val === '' ? '' : (field === 'sets' ? parseInt(val)||1 : parseFloat(val)||val);
+  S.session[day][exId] = migrateEntry(S.session[day][exId]);
+  S.session[day][exId][setIdx][field] = val === '' ? '' : parseFloat(val) || val;
   save();
 }
 
-function changeSetCount(exId, day, delta) {
+function addSet(exId, day) {
   if (!S.session[day][exId]) S.session[day][exId] = getDefaultEntry(exId, day);
-  const current = parseInt(S.session[day][exId].sets)||1;
-  const next = Math.max(1, Math.min(20, current + delta));
-  S.session[day][exId].sets = next;
+  S.session[day][exId] = migrateEntry(S.session[day][exId]);
+  const last = S.session[day][exId].slice(-1)[0] || { weight: '', reps: '' };
+  S.session[day][exId].push({ weight: last.weight, reps: last.reps });
   save();
-  const el = document.getElementById(`sets-count-${exId}-${day}`);
-  if (el) el.textContent = next;
+  // Re-render card body only
+  const card = document.querySelector(`.exercise-card[data-id="${exId}"], .wk-card[data-id="${exId}"]`);
+  if (card) {
+    const body = card.querySelector('.card-body, .wk-card-body');
+    if (body) body.innerHTML = setsRowsHTML(S.session[day][exId], exId, day) +
+      `<button class="add-set-btn" onclick="addSet('${exId}','${day}')">+ Add Set</button>`;
+  }
+}
+
+function removeSet(exId, day, idx) {
+  if (!S.session[day][exId] || S.session[day][exId].length <= 1) return;
+  S.session[day][exId].splice(idx, 1);
+  save();
+  const card = document.querySelector(`.exercise-card[data-id="${exId}"], .wk-card[data-id="${exId}"]`);
+  if (card) {
+    const body = card.querySelector('.card-body, .wk-card-body');
+    if (body) body.innerHTML = setsRowsHTML(S.session[day][exId], exId, day) +
+      `<button class="add-set-btn" onclick="addSet('${exId}','${day}')">+ Add Set</button>`;
+  }
 }
 
 // ── Day actions ────────────────────────────────────────────────────────────
@@ -871,12 +904,10 @@ function switchDay(day) { S.activeDay = day; render(); }
 function logWorkout(day) {
   const logged = {};
   S.split[day].forEach(exId => {
-    const entry = S.session[day][exId];
-    if (!entry || (entry.weight === '' && entry.reps === '')) return;
-    const sets = [];
-    const n = parseInt(entry.sets)||1;
-    for (let i = 0; i < n; i++) sets.push({ weight: entry.weight, reps: entry.reps });
-    logged[exId] = sets;
+    const entry = migrateEntry(S.session[day][exId] || []);
+    const valid = entry.filter(s => s.weight !== '' || s.reps !== '');
+    if (!valid.length) return;
+    logged[exId] = valid;
   });
   if (!Object.keys(logged).length) { showToast('Enter weight/reps before logging','error'); return; }
 
@@ -1884,7 +1915,8 @@ function shouldSuggestWeightUp(exId, excludeId) {
 function workoutCardHTML(exId, day, lastSession) {
   const ex = S.bank[exId]; if (!ex) return '';
   if (!S.session[day][exId]) S.session[day][exId] = getDefaultEntry(exId, day);
-  const { weight, reps, sets } = S.session[day][exId];
+  S.session[day][exId] = migrateEntry(S.session[day][exId]);
+  const sessionSets = S.session[day][exId];
   const isDone = !!WK.done[exId];
 
   const prevSets = lastSession?.exercises?.[exId] || [];
@@ -1915,28 +1947,8 @@ function workoutCardHTML(exId, day, lastSession) {
       </div>
       ${prevHTML}${suggestHTML}
       <div class="wk-card-body">
-        <div class="set-control-row">
-          <div class="set-field">
-            <div class="set-field-label">Weight (lbs)</div>
-            <input class="set-input" type="number" min="0" step="2.5" inputmode="decimal"
-              placeholder="0" value="${weight}"
-              onchange="updateEntry('${exId}','${day}','weight',this.value)">
-          </div>
-          <div class="set-field">
-            <div class="set-field-label">Reps</div>
-            <input class="set-input" type="number" min="1" step="1" inputmode="numeric"
-              placeholder="0" value="${reps}"
-              onchange="updateEntry('${exId}','${day}','reps',this.value)">
-          </div>
-          <div class="sets-counter">
-            <div class="sets-counter-label">Sets</div>
-            <div class="sets-counter-control">
-              <button class="sets-counter-btn" onclick="wkChangeSetCount('${exId}','${day}',-1)">−</button>
-              <div class="sets-counter-val" id="wk-sets-${exId}">${sets}</div>
-              <button class="sets-counter-btn" onclick="wkChangeSetCount('${exId}','${day}',+1)">+</button>
-            </div>
-          </div>
-        </div>
+        ${setsRowsHTML(sessionSets, exId, day)}
+        ${isDone ? '' : `<button class="add-set-btn" onclick="addSet('${exId}','${day}')">+ Add Set</button>`}
       </div>
     </div>`;
 }
@@ -1957,15 +1969,6 @@ function toggleWkDone(exId) {
   if (chip) chip.textContent = `${doneCount}/${total} done · ${pct}%`;
 }
 
-function wkChangeSetCount(exId, day, delta) {
-  if (!S.session[day][exId]) S.session[day][exId] = getDefaultEntry(exId, day);
-  const current = parseInt(S.session[day][exId].sets)||1;
-  const next = Math.max(1, Math.min(20, current + delta));
-  S.session[day][exId].sets = next;
-  save();
-  const el = document.getElementById(`wk-sets-${exId}`);
-  if (el) el.textContent = next;
-}
 
 function removeFromWorkout(exId) {
   const day = WK.day;
@@ -1985,12 +1988,10 @@ function finishWorkout() {
   const doneIds = Object.keys(WK.done).filter(id => WK.done[id]);
   const logged = {};
   doneIds.forEach(exId => {
-    const entry = S.session[day][exId];
-    if (!entry || (entry.weight === '' && entry.reps === '')) return;
-    const sets = [];
-    const n = parseInt(entry.sets)||1;
-    for (let i = 0; i < n; i++) sets.push({ weight: entry.weight, reps: entry.reps });
-    logged[exId] = sets;
+    const entry = migrateEntry(S.session[day][exId] || []);
+    const valid = entry.filter(s => s.weight !== '' || s.reps !== '');
+    if (!valid.length) return;
+    logged[exId] = valid;
   });
 
   if (!Object.keys(logged).length) { showToast('Enter weight/reps before finishing','error'); clearInterval(WK.timerInterval); WK.timerInterval = setInterval(tickTimer,1000); return; }
