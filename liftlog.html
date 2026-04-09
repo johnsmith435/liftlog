@@ -601,7 +601,16 @@ function loadState() {
 }
 function save() {
   try { localStorage.setItem(STORAGE_KEY, JSON.stringify(S)); } catch(e) {}
+  if (WK.day) saveWK();
 }
+
+const WK_KEY = 'liftlog_wk';
+function saveWK() {
+  if (!WK.day) { localStorage.removeItem(WK_KEY); return; }
+  const elapsed = WK.pausedElapsed + (WK.paused ? 0 : Math.floor((Date.now() - WK.startTime) / 1000));
+  try { localStorage.setItem(WK_KEY, JSON.stringify({ day: WK.day, elapsed, done: WK.done, paused: WK.paused })); } catch(e) {}
+}
+function clearWK() { localStorage.removeItem(WK_KEY); }
 
 function exportData() {
   const blob = new Blob([JSON.stringify(S, null, 2)], { type:'application/json' });
@@ -1958,17 +1967,23 @@ function startWorkout(day) {
   WK.day = day;
   WK.startTime = Date.now();
   WK.done = {};
+  WK.paused = false;
+  WK.pausedElapsed = 0;
   // Seed session entries with defaults if empty
   S.split[day].forEach(id => {
     if (!S.session[day][id]) S.session[day][id] = getDefaultEntry(id, day);
   });
+  resumeWorkoutUI(day);
+  saveWK();
+}
+
+function resumeWorkoutUI(day) {
   const LABEL = { push:'Push Day', pull:'Pull Day', legs:'Leg Day', arms:'Arms Day' };
   document.getElementById('wk-title').textContent = LABEL[day];
   document.getElementById('workout-overlay').style.display = 'flex';
   renderWorkoutCards();
   clearInterval(WK.timerInterval);
   WK.timerInterval = setInterval(tickTimer, 1000);
-  // Make bank modal add to workout
   BM.targetDay = day;
 }
 
@@ -1994,11 +2009,13 @@ function togglePauseWorkout() {
     document.getElementById('wk-pause-label') && (document.getElementById('wk-pause-label').textContent = 'Resume');
     document.getElementById('wk-paused-label') && (document.getElementById('wk-paused-label').style.display = 'block');
   }
+  saveWK();
 }
 
 function cancelWorkout() {
   if (!confirm('Cancel this workout? Your exercise data will not be lost.')) return;
   clearInterval(WK.timerInterval);
+  clearWK();
   document.getElementById('workout-overlay').style.display = 'none';
   WK = { day: null, startTime: null, timerInterval: null, done: {}, paused: false, pausedElapsed: 0 };
 }
@@ -2098,6 +2115,7 @@ function workoutCardHTML(exId, day, lastSession) {
 
 function toggleWkDone(exId) {
   WK.done[exId] = !WK.done[exId];
+  saveWK();
   // Re-render just this card so buttons appear/disappear correctly
   const card = document.querySelector(`#wk-scroll .wk-card[data-id="${exId}"]`);
   if (card) {
@@ -2143,6 +2161,7 @@ function finishWorkout() {
   S.history.push({ id: Date.now().toString(), day, date: today(), exercises: logged, duration: elapsed });
   const justLoggedId = S.history[S.history.length - 1].id;
   S.session[day] = {};
+  clearWK();
   save();
 
   // Hide workout overlay
@@ -2455,6 +2474,26 @@ applyTheme(localStorage.getItem('liftlog_theme') || 'dark');
 
 loadState();
 render();
+
+// Restore in-progress workout if app was closed mid-session
+try {
+  const wkRaw = localStorage.getItem(WK_KEY);
+  if (wkRaw) {
+    const saved = JSON.parse(wkRaw);
+    if (saved.day && S.split[saved.day]) {
+      WK.day = saved.day;
+      WK.done = saved.done || {};
+      WK.paused = true; // treat as paused so elapsed doesn't drift while restoring
+      WK.pausedElapsed = saved.elapsed || 0;
+      WK.startTime = Date.now();
+      resumeWorkoutUI(saved.day);
+      // Show paused state visually
+      document.getElementById('wk-pause-icon') && (document.getElementById('wk-pause-icon').innerHTML = svg(ICO.play, 13));
+      document.getElementById('wk-pause-label') && (document.getElementById('wk-pause-label').textContent = 'Resume');
+      document.getElementById('wk-paused-label') && (document.getElementById('wk-paused-label').style.display = 'block');
+    }
+  }
+} catch(e) {}
 </script>
 </body>
 </html>
