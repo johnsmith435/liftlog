@@ -2662,7 +2662,7 @@ function shareWorkoutCard() {
     const file = new File([blob], `liftlog-${session.date || 'workout'}.png`, { type: 'image/png' });
     if (navigator.share && navigator.canShare && navigator.canShare({ files: [file] })) {
       try {
-        await navigator.share({ files: [file], title: `${dayLabel} — LiftLog` });
+        await navigator.share({ files: [file] });
       } catch(e) { if (e.name !== 'AbortError') fallbackDownload(canvas, session.date); }
     } else {
       fallbackDownload(canvas, session.date);
