@@ -32,7 +32,7 @@
     }
     body { background: var(--bg); color: var(--text); font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; min-height: 100vh; padding-bottom: env(safe-area-inset-bottom); }
     /* Header */
-    .header { display: flex; align-items: center; justify-content: space-between; padding: 18px 24px; border-bottom: 1px solid var(--border); position: sticky; top: 0; background: var(--bg); z-index: 20; }
+    .header { display: flex; align-items: center; justify-content: space-between; padding: 18px 24px; border-bottom: 1px solid var(--border); }
     /* PWA standalone: push header content below notch/Dynamic Island */
     html.pwa .header { padding-top: max(20px, env(safe-area-inset-top)); }
     .logo { font-size: 18px; font-weight: 700; letter-spacing: -0.3px; }
@@ -344,6 +344,7 @@
 </head>
 <body>
 
+<div style="position:sticky;top:0;z-index:20;background:var(--bg)">
 <div class="header">
   <div class="logo">Lift<span>Log</span> <span style="font-size:10px;color:var(--muted);font-weight:400">v4</span></div>
   <div style="display:flex;align-items:center;gap:10px">
@@ -357,6 +358,7 @@
   <button class="nav-btn"        data-day="legs"      onclick="switchDay('legs')"><span class="nav-dot"></span>Legs</button>
   <button class="nav-btn"        data-day="arms"      onclick="switchDay('arms')"><span class="nav-dot"></span>Arms</button>
   <button class="nav-btn"        data-day="dashboard" onclick="switchDay('dashboard')"><span class="nav-dot"></span>Dashboard</button>
+</div>
 </div>
 <div class="main" id="main"></div>
 
@@ -676,6 +678,16 @@ function getPR(exId) {
   let max = 0;
   S.history.forEach(h => (h.exercises[exId]||[]).forEach(s => { const w=parseFloat(s.weight)||0; if(w>max) max=w; }));
   return max;
+}
+// Returns true only if sessionId is the FIRST session where exId reached weight w
+function isFirstPR(exId, sessionId, w) {
+  if (!w || w <= 0) return false;
+  const sorted = S.history.filter(h => h.exercises[exId]?.length).sort((a,b) => a.date.localeCompare(b.date) || a.id.localeCompare(b.id));
+  for (const h of sorted) {
+    const maxW = Math.max(...(h.exercises[exId]||[]).map(s => parseFloat(s.weight)||0));
+    if (maxW >= w) return h.id === sessionId;
+  }
+  return false;
 }
 function getDefaultEntry(exId, day) {
   const d = DEFAULT_ENTRY[day]?.[exId];
@@ -1186,11 +1198,10 @@ function sessionBodyHTML(session, editing=false) {
   const rows = Object.keys(session.exercises).map(exId => {
     const ex   = S.bank[exId];
     const sets = session.exercises[exId]||[];
-    const pr   = getPR(exId);
     const w    = parseFloat(sets[0]?.weight)||0;
     const r    = parseInt(sets[0]?.reps)||0;
     const n    = sets.length;
-    const isPR = w > 0 && w >= pr;
+    const isPR = isFirstPR(exId, session.id, w);
 
     if (editing) {
       const bodyHtml = sessionEditCardBodyHTML(sets, session.id, exId);
@@ -2210,13 +2221,8 @@ function renderSummaryBody() {
     return acc + sets.reduce((a, sv) => a + (parseInt(sv.reps)||0), 0);
   }, 0);
   const prs = exIds.filter(id => {
-    const w = parseFloat(session.exercises[id]?.[0]?.weight)||0;
-    const allPrev = S.history.filter(h => h.id !== histId);
-    const prevMax = allPrev.reduce((max, h) => {
-      const pw = parseFloat(h.exercises[id]?.[0]?.weight)||0;
-      return pw > max ? pw : max;
-    }, 0);
-    return w > 0 && w > prevMax;
+    const w = Math.max(...(session.exercises[id]||[]).map(s => parseFloat(s.weight)||0));
+    return isFirstPR(id, histId, w);
   });
 
   const statsHTML = `
