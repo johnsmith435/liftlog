@@ -2303,17 +2303,9 @@ function renderSummaryBody() {
           <div class="health-stat-val">${health.peakHeartRate ?? '—'}</div>
           <div class="health-stat-lbl">Peak HR</div>
         </div>
-        ${health.minHeartRate != null ? `<div class="health-stat">
-          <div class="health-stat-val">${health.minHeartRate}</div>
-          <div class="health-stat-lbl">Min HR</div>
-        </div>` : ''}
         ${health.hrv != null ? `<div class="health-stat">
           <div class="health-stat-val">${health.hrv}</div>
           <div class="health-stat-lbl">HRV (ms)</div>
-        </div>` : ''}
-        ${health.activeCalories && health.totalCalories ? `<div class="health-stat">
-          <div class="health-stat-val">${health.totalCalories - health.activeCalories}</div>
-          <div class="health-stat-lbl">Resting Cal</div>
         </div>` : ''}
       </div>
     </div>` : `
@@ -2540,7 +2532,6 @@ function shareWorkoutCard() {
     health.totalCalories  != null ? { val: health.totalCalories,  lbl: 'Total Cal'  } : null,
     health.avgHeartRate   != null ? { val: health.avgHeartRate,   lbl: 'Avg HR'     } : null,
     health.peakHeartRate  != null ? { val: health.peakHeartRate,  lbl: 'Peak HR'    } : null,
-    health.minHeartRate   != null ? { val: health.minHeartRate,   lbl: 'Min HR'     } : null,
     health.hrv            != null ? { val: health.hrv,            lbl: 'HRV (ms)'   } : null,
   ].filter(Boolean) : [];
 
