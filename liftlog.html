@@ -2144,6 +2144,10 @@ function renderSummaryBody() {
           <div class="health-stat-val">${health.peakHeartRate ?? '—'}</div>
           <div class="health-stat-lbl">Peak HR</div>
         </div>
+        ${health.minHeartRate != null ? `<div class="health-stat">
+          <div class="health-stat-val">${health.minHeartRate}</div>
+          <div class="health-stat-lbl">Min HR</div>
+        </div>` : ''}
         ${health.hrv != null ? `<div class="health-stat">
           <div class="health-stat-val">${health.hrv}</div>
           <div class="health-stat-lbl">HRV (ms)</div>
@@ -2234,62 +2238,87 @@ function importHealthData(histId) {
     reader.onload = ev => {
       try {
         const data = JSON.parse(ev.target.result);
-        // Flatten — accept nested or flat
-        const h = data.healthData || data;
 
-        // Case-insensitive key lookup so Shortcuts key naming doesn't matter
-        const flat = {};
-        Object.keys(h).forEach(k => { flat[k.toLowerCase().replace(/[_\s]/g,'')] = h[k]; });
+        // ── Health Exporter & Shortcuts format ──
+        // { workouts: [{ startDate, endDate, duration, statistics: {
+        //   HKQuantityTypeIdentifierActiveEnergyBurned: { sum },
+        //   HKQuantityTypeIdentifierBasalEnergyBurned:  { sum },
+        //   HKQuantityTypeIdentifierHeartRate: { average, max, min }
+        // }}]}
+        let activeCal, totalCal, avgHR, peakHR, minHR, startTime, durationSecs, hrv, hrTimeline = null;
 
-        const pick = (...keys) => {
-          for (const k of keys) { const v = flat[k.toLowerCase().replace(/[_\s]/g,'')]; if (v != null && v !== '') return v; }
-          return null;
-        };
+        if (data.workouts && Array.isArray(data.workouts) && data.workouts.length > 0) {
+          // Pick the most recent workout
+          const w = data.workouts[data.workouts.length - 1];
+          const stats = w.statistics || {};
+          const hrStats  = stats['HKQuantityTypeIdentifierHeartRate'] || {};
+          const actCal   = stats['HKQuantityTypeIdentifierActiveEnergyBurned'] || {};
+          const basCal   = stats['HKQuantityTypeIdentifierBasalEnergyBurned'] || {};
+          const hrvStats = stats['HKQuantityTypeIdentifierHeartRateVariabilitySDNN'] || {};
 
-        const activeCal  = pick('activecalories','activeenergy','activeenergyburned');
-        const totalCal   = pick('totalcalories','totalenergy','totalenergyburned');
-        const avgHR      = pick('avgheartrate','averageheartrate','heartrateaverage','averagehr');
-        const peakHR     = pick('peakheartrate','maxheartrate','maximumheartrate','peakhr','maximumhr','maxhr');
-        const startTime  = pick('starttime','startdate','start');
+          activeCal    = actCal.sum   ?? null;
+          totalCal     = (actCal.sum != null && basCal.sum != null) ? actCal.sum + basCal.sum : null;
+          avgHR        = hrStats.average ?? null;
+          peakHR       = hrStats.max     ?? null;
+          minHR        = hrStats.min     ?? null;
+          hrv          = hrvStats.average ?? null;
+          startTime    = w.startDate    ?? null;
+          durationSecs = w.duration     ?? null;
 
-        // Always show the raw keys found — helps diagnose mismatches
-        const rawKeys = Object.keys(h).join(', ');
+          // HR timeline from workout route/samples if present
+          const rawTimeline = w.heartRateSamples || w.hrSamples || w.heartRate || null;
+          hrTimeline = Array.isArray(rawTimeline)
+            ? rawTimeline.map(s => Number(s.value ?? s) ).filter(n => !isNaN(n) && n > 0)
+            : null;
 
-        // Use != null so 0 values still pass
+        } else {
+          // Legacy flat / Shortcuts format fallback
+          const h = data.healthData || data;
+          const flat = {};
+          Object.keys(h).forEach(k => { flat[k.toLowerCase().replace(/[_\s]/g,'')] = h[k]; });
+          const pick = (...keys) => { for (const k of keys) { const v = flat[k]; if (v != null && v !== '') return v; } return null; };
+          activeCal    = pick('activecalories','activeenergy','activeenergyburned');
+          totalCal     = pick('totalcalories','totalenergy','totalenergyburned');
+          avgHR        = pick('avgheartrate','averageheartrate');
+          peakHR       = pick('peakheartrate','maxheartrate','maximumheartrate');
+          hrv          = pick('hrv','heartratevariability');
+          startTime    = pick('starttime','startdate','start');
+          durationSecs = pick('duration');
+          const rawTimeline = h.hrTimeline || h.heartRateTimeline || null;
+          hrTimeline   = Array.isArray(rawTimeline) ? rawTimeline.map(Number).filter(n => !isNaN(n) && n > 0) : null;
+        }
+
         if (activeCal == null && avgHR == null) {
-          showToast(`No match. Raw keys: ${rawKeys || 'none'}`, 'error');
+          showToast('Could not read workout data from this file', 'error');
           return;
         }
 
         const session = S.history.find(s => s.id === histId);
         if (!session) return;
-        const hrv        = pick('hrv','heartratevariability','heartratevariabilitysdnn','hrvsdnn');
-        const workoutMins = pick('workoutminutes','durationminutes','duration');
-        // hrTimeline: accept array of numbers
-        const rawTimeline = h.hrTimeline || h.hr_timeline || h.heartRateTimeline || h.heartrate_timeline || null;
-        const hrTimeline = Array.isArray(rawTimeline) ? rawTimeline.map(Number).filter(n => !isNaN(n)) : null;
 
-        // Store null for zero values so UI shows — instead of 0
-        const nonZero = (v) => (v != null && v !== '' && Number(v) !== 0) ? Math.round(v) : null;
+        const nonZero = v => (v != null && Number(v) > 0) ? Math.round(v) : null;
+        const workoutMins = durationSecs != null ? Math.round(durationSecs / 60) : null;
+
         session.healthData = {
           activeCalories: nonZero(activeCal),
           totalCalories:  nonZero(totalCal),
           avgHeartRate:   nonZero(avgHR),
           peakHeartRate:  nonZero(peakHR),
+          minHeartRate:   nonZero(minHR),
           hrv:            nonZero(hrv),
-          workoutMinutes: workoutMins != null && workoutMins !== '' ? Math.round(workoutMins) : null,
-          hrTimeline:     hrTimeline  || null,
-          startTime:      startTime   ? String(startTime) : null,
+          workoutMinutes: workoutMins,
+          hrTimeline:     hrTimeline?.length ? hrTimeline : null,
+          startTime:      startTime ? String(startTime) : null,
         };
         save();
         renderSummaryBody();
-        const imported = [
-          activeCal != null ? `cal:${Math.round(activeCal)}` : null,
-          avgHR != null ? `avgHR:${Math.round(avgHR)}` : null,
-          peakHR != null ? `peakHR:${Math.round(peakHR)}` : null,
-          hrTimeline ? `timeline:${hrTimeline.length}pts` : null,
-        ].filter(Boolean).join(', ');
-        showToast(`Imported: ${imported || 'no values matched'}`, 'success');
+        const summary = [
+          nonZero(activeCal) ? `${Math.round(activeCal)} cal` : null,
+          nonZero(avgHR)     ? `avg HR ${Math.round(avgHR)}` : null,
+          nonZero(peakHR)    ? `peak ${Math.round(peakHR)}` : null,
+          workoutMins        ? `${workoutMins} min` : null,
+        ].filter(Boolean).join(' · ');
+        showToast(`Imported: ${summary || 'data saved'}`, 'success');
       } catch(err) { showToast('Could not parse file: ' + err.message, 'error'); }
     };
     reader.readAsText(file);
