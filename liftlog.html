@@ -2486,7 +2486,12 @@ function importHealthData(histId) {
         // Detect Health Auto Export: data.data.workouts
         const haeData = data.data || data;
         if (haeData.workouts && Array.isArray(haeData.workouts) && haeData.workouts.length > 0) {
-          const w = haeData.workouts[haeData.workouts.length - 1];
+          // Filter to strength training workouts only, pick the most recent by start time
+          const strength = haeData.workouts.filter(w => w.name === 'Traditional Strength Training');
+          const pool = strength.length ? strength : haeData.workouts;
+          const w = pool.reduce((best, cur) =>
+            new Date(cur.start || 0) > new Date(best.start || 0) ? cur : best
+          );
 
           activeCal    = w.activeEnergyBurned?.qty ?? null;
           avgHR        = w.heartRate?.avg?.qty ?? w.avgHeartRate?.qty ?? null;
