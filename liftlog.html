@@ -940,22 +940,26 @@ function sessionHistoryHTML(day, sessions) {
 function sessionRowHTML(session) {
   const isOpen = !!openSessions[session.id];
   const exIds  = Object.keys(session.exercises);
-  const previewPills = exIds.slice(0,3).map(id => {
-    const ex = S.bank[id]; if(!ex) return '';
-    const w = session.exercises[id]?.[0]?.weight;
-    return `<span class="session-meta-pill">${ex.name.split(' ')[0]}${w?' '+w+'lb':''}</span>`;
-  }).join('');
+  const DAY_COLOR = { push:'var(--push)', pull:'var(--pull)', legs:'var(--legs)', arms:'var(--arms)' };
+  const DAY_LABEL = { push:'Push', pull:'Pull', legs:'Legs', arms:'Arms' };
+  const dayColor = DAY_COLOR[session.day] || 'var(--primary)';
+  const dayLabel = DAY_LABEL[session.day] || session.day || '';
+  const dayPill = dayLabel ? `<span style="font-size:10px;font-weight:600;padding:1px 7px;border-radius:4px;background:${dayColor}22;color:${dayColor};border:1px solid ${dayColor}44">${dayLabel}</span>` : '';
   const bodyHTML = isOpen ? sessionBodyHTML(session) : '';
+  const footHTML = isOpen ? sessionFooterHTML(session, false) : '';
 
   return `
     <div class="session-item ${isOpen?'open':''}" id="srow-${session.id}">
       <div class="session-item-header" onclick="toggleSession('${session.id}')">
-        <div class="session-date-label">${formatDate(session.date)}</div>
-        <div class="session-meta-pills">${previewPills}</div>
-        <div style="font-size:11px;color:var(--muted);margin-left:8px;flex-shrink:0">${exIds.length} exercises</div>
+        <div style="display:flex;flex-direction:column;gap:3px;flex:1">
+          <div class="session-date-label">${formatDate(session.date)}</div>
+          ${dayPill}
+        </div>
+        <div style="font-size:11px;color:var(--muted);flex-shrink:0">${exIds.length} exercises</div>
         <div class="session-chevron">${svg(ICO.chev,13)}</div>
       </div>
       <div class="session-body" id="sbody-${session.id}">${bodyHTML}</div>
+      <div id="sfoot-${session.id}">${footHTML}</div>
     </div>`;
 }
 
@@ -1014,7 +1018,11 @@ function sessionBodyHTML(session, editing=false) {
       </div>`;
   }).join('');
 
-  const footer = editing ? `
+  return rows;
+}
+
+function sessionFooterHTML(session, editing) {
+  if (editing) return `
     <div class="session-footer" style="flex-wrap:wrap;gap:8px">
       <div class="session-date-edit">
         <span style="font-size:11px;color:var(--muted)">Date:</span>
@@ -1025,7 +1033,8 @@ function sessionBodyHTML(session, editing=false) {
         <button class="btn-save-date" onclick="saveSessionEdits('${session.id}')">Save</button>
         <button class="btn-danger-sm" onclick="cancelSessionEdit('${session.id}')">Cancel</button>
       </div>
-    </div>` : `
+    </div>`;
+  return `
     <div class="session-footer">
       <div class="session-date-edit">
         <span style="font-size:11px;color:var(--muted)">Date:</span>
@@ -1038,18 +1047,20 @@ function sessionBodyHTML(session, editing=false) {
         <button class="btn-danger-sm" onclick="deleteSession('${session.id}')">Delete</button>
       </div>
     </div>`;
+}
 
-  return rows + footer;
+function setSessionView(id, editing) {
+  const s = S.history.find(h => h.id===id); if (!s) return;
+  const body = document.getElementById(`sbody-${id}`);
+  const foot = document.getElementById(`sfoot-${id}`);
+  if (body) body.innerHTML = sessionBodyHTML(s, editing);
+  if (foot) foot.innerHTML = sessionFooterHTML(s, editing);
+  if (editing) initSessionSortable(id, s);
 }
 
 function startSessionEdit(id) {
   editingSessions[id] = true;
-  const body = document.getElementById(`sbody-${id}`);
-  const s = S.history.find(h => h.id===id);
-  if (body && s) {
-    body.innerHTML = sessionBodyHTML(s, true);
-    initSessionSortable(id, s);
-  }
+  setSessionView(id, true);
 }
 
 function initSessionSortable(sessionId, session) {
@@ -1075,18 +1086,11 @@ function initSessionSortable(sessionId, session) {
 
 function cancelSessionEdit(id) {
   editingSessions[id] = false;
-  const body = document.getElementById(`sbody-${id}`);
-  const s = S.history.find(h => h.id===id);
-  if (body && s) body.innerHTML = sessionBodyHTML(s, false);
+  setSessionView(id, false);
 }
 
 function refreshSessionEditBody(sessionId) {
-  const s = S.history.find(h => h.id===sessionId); if (!s) return;
-  const body = document.getElementById(`sbody-${sessionId}`);
-  if (body) {
-    body.innerHTML = sessionBodyHTML(s, true);
-    initSessionSortable(sessionId, s);
-  }
+  setSessionView(sessionId, true);
 }
 
 function updateSessionEntry(sessionId, exId) {
@@ -1124,11 +1128,12 @@ function saveSessionEdits(id) {
   editingSessions[id] = false;
   openSessions[id] = false;
   save();
-  // Collapse the session row closed
   const row  = document.getElementById(`srow-${id}`);
   const body = document.getElementById(`sbody-${id}`);
+  const foot = document.getElementById(`sfoot-${id}`);
   if (row)  row.classList.remove('open');
   if (body) body.innerHTML = '';
+  if (foot) foot.innerHTML = '';
   showToast('Session saved', 'success');
 }
 
@@ -1136,13 +1141,15 @@ function toggleSession(id) {
   openSessions[id] = !openSessions[id];
   const row  = document.getElementById(`srow-${id}`);
   const body = document.getElementById(`sbody-${id}`);
+  const foot = document.getElementById(`sfoot-${id}`);
   if (!row||!body) return;
   row.classList.toggle('open', openSessions[id]);
   if (openSessions[id]) {
-    const s = S.history.find(h => h.id===id);
-    if (s) body.innerHTML = sessionBodyHTML(s, !!editingSessions[id]);
-    // Scroll the expanded card into view after content renders
+    setSessionView(id, !!editingSessions[id]);
     setTimeout(() => row.scrollIntoView({ behavior: 'smooth', block: 'start' }), 50);
+  } else {
+    body.innerHTML = '';
+    if (foot) foot.innerHTML = '';
   }
 }
 
