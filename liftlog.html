@@ -1343,8 +1343,28 @@ function saveSessionEdits(id) {
   // Save date
   const dateInput = document.getElementById(`date-edit-${id}`);
   if (dateInput?.value) s.date = dateInput.value;
-  // Flush any pending input changes (onchange may not fire on mobile before save tap)
-  document.querySelectorAll(`#sbody-${id} input.set-input`).forEach(el => el.dispatchEvent(new Event('change')));
+  // Flush all set inputs directly from DOM — don't rely on onchange firing on mobile
+  document.querySelectorAll(`#sbody-${id} .sedit-body`).forEach(body => {
+    const sessionId = body.dataset.sid;
+    const exId = body.dataset.exid;
+    if (!s.exercises[exId]) return;
+    const rows = body.querySelectorAll('.set-row');
+    if (rows.length === 0) return;
+    // collapsed view: single row applies to all sets
+    const isExpanded = rows.length > 0 && body.querySelector('.set-row-label') !== null;
+    if (isExpanded) {
+      rows.forEach((row, i) => {
+        if (!s.exercises[exId][i]) return;
+        const [wInput, rInput] = row.querySelectorAll('input.set-input');
+        if (wInput) s.exercises[exId][i].weight = wInput.value === '' ? '' : parseFloat(wInput.value) || wInput.value;
+        if (rInput) s.exercises[exId][i].reps   = rInput.value === '' ? '' : parseFloat(rInput.value) || rInput.value;
+      });
+    } else {
+      const [wInput, rInput] = body.querySelectorAll('input.set-input');
+      if (wInput) s.exercises[exId].forEach(set => { set.weight = wInput.value === '' ? '' : parseFloat(wInput.value) || wInput.value; });
+      if (rInput) s.exercises[exId].forEach(set => { set.reps   = rInput.value === '' ? '' : parseFloat(rInput.value) || rInput.value; });
+    }
+  });
   editingSessions[id] = false;
   openSessions[id] = false;
   save();
