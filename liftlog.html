@@ -2458,6 +2458,35 @@ function renderSummaryBody() {
             const m = health.workoutMinutes || 0;
             return m ? Math.round(i * m / (hrData.length - 1)) + 'm' : String(i);
           });
+      const avgHR  = health.avgHeartRate  ?? null;
+      const peakHR = health.peakHeartRate ?? null;
+      const refLinePlugin = {
+        id: 'refLines',
+        afterDatasetsDraw(chart) {
+          const { ctx, scales: { y, x } } = chart;
+          const lines = [
+            avgHR  != null ? { val: avgHR,  color: 'rgba(248,113,113,0.45)', label: `Avg ${Math.round(avgHR)}` }  : null,
+            peakHR != null ? { val: peakHR, color: 'rgba(248,113,113,0.25)', label: `Max ${Math.round(peakHR)}` } : null,
+          ].filter(Boolean);
+          lines.forEach(({ val, color, label }) => {
+            const yPx = y.getPixelForValue(val);
+            ctx.save();
+            ctx.strokeStyle = color;
+            ctx.lineWidth = 1;
+            ctx.setLineDash([4, 4]);
+            ctx.beginPath();
+            ctx.moveTo(x.left, yPx);
+            ctx.lineTo(x.right, yPx);
+            ctx.stroke();
+            ctx.setLineDash([]);
+            ctx.fillStyle = color;
+            ctx.font = '10px -apple-system, BlinkMacSystemFont, sans-serif';
+            ctx.textAlign = 'right';
+            ctx.fillText(label, x.right - 2, yPx - 3);
+            ctx.restore();
+          });
+        }
+      };
       new Chart(canvas.getContext('2d'), {
         type: 'line',
         data: {
@@ -2471,7 +2500,8 @@ function renderSummaryBody() {
             x: { grid: { color: 'rgba(255,255,255,0.05)' }, ticks: { color: '#4b5563', maxTicksLimit: 8 } },
             y: { grid: { color: 'rgba(255,255,255,0.05)' }, ticks: { color: '#4b5563' } }
           }
-        }
+        },
+        plugins: [refLinePlugin]
       });
     }
   }
