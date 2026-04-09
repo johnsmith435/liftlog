@@ -426,7 +426,13 @@
   <div class="summary-modal">
     <div class="summary-header">
       <div class="modal-title">Workout Summary</div>
-      <button class="close-btn" onclick="closeSummary()">×</button>
+      <div style="display:flex;align-items:center;gap:8px">
+        <button class="btn btn-ghost" style="padding:5px 12px;font-size:12px;gap:5px" onclick="shareWorkoutCard()">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M4 12v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8"/><polyline points="16 6 12 2 8 6"/><line x1="12" y1="2" x2="12" y2="15"/></svg>
+          Share
+        </button>
+        <button class="close-btn" onclick="closeSummary()">×</button>
+      </div>
     </div>
     <div class="summary-body" id="summary-body"></div>
   </div>
@@ -2488,6 +2494,264 @@ function viewSessionSummary(histId) {
 
 function closeSummary() {
   document.getElementById('summary-overlay').classList.remove('open');
+}
+
+function shareWorkoutCard() {
+  const histId = _summaryHistId;
+  const session = S.history.find(h => h.id === histId);
+  if (!session) return;
+
+  const dur = _summaryElapsed || session.duration || 0;
+  const m = Math.floor(dur / 60), s = dur % 60;
+  const durationStr = dur ? `${m}:${s.toString().padStart(2,'0')}` : null;
+  const health = session.healthData || null;
+  const exIds = Object.keys(session.exercises);
+  const totalSets = exIds.reduce((acc, id) => acc + (session.exercises[id]?.length||0), 0);
+  const totalReps = exIds.reduce((acc, id) => {
+    return acc + (session.exercises[id]||[]).reduce((a, sv) => a + (parseInt(sv.reps)||0), 0);
+  }, 0);
+  const prs = exIds.filter(id => {
+    const w = Math.max(...(session.exercises[id]||[]).map(sv => parseFloat(sv.weight)||0));
+    return isFirstPR(id, histId, w);
+  });
+
+  const DAY_LABEL = { push:'Push Day', pull:'Pull Day', legs:'Leg Day', arms:'Arms Day' };
+  const dayLabel = DAY_LABEL[session.day] || session.day;
+  const dateStr = session.date
+    ? new Date(session.date + 'T12:00:00').toLocaleDateString('en-US',{ weekday:'long', month:'long', day:'numeric' })
+    : '';
+
+  // ── Canvas layout ──────────────────────────────────────────────────────────
+  const W = 640;
+  const PADDING = 36;
+  const COL = W - PADDING * 2;
+
+  // Measure height needed
+  const exLineH = 46;
+  const healthRows = health ? Math.ceil([
+    health.activeCalories, health.totalCalories,
+    health.avgHeartRate, health.peakHeartRate,
+    health.minHeartRate, health.hrv
+  ].filter(v => v != null).length / 3) : 0;
+
+  const H = 160                          // header block
+    + 90                                 // stat pills row
+    + (health ? (healthRows * 56 + 70) : 0)  // health section
+    + exIds.length * exLineH + 60        // exercise rows + label
+    + 60;                                // footer
+
+  const canvas = document.createElement('canvas');
+  const DPR = 2;
+  canvas.width  = W * DPR;
+  canvas.height = H * DPR;
+  const ctx = canvas.getContext('2d');
+  ctx.scale(DPR, DPR);
+
+  // ── Helpers ────────────────────────────────────────────────────────────────
+  function roundRect(x, y, w, h, r) {
+    ctx.beginPath();
+    ctx.moveTo(x + r, y);
+    ctx.lineTo(x + w - r, y);
+    ctx.quadraticCurveTo(x + w, y, x + w, y + r);
+    ctx.lineTo(x + w, y + h - r);
+    ctx.quadraticCurveTo(x + w, y + h, x + w - r, y + h);
+    ctx.lineTo(x + r, y + h);
+    ctx.quadraticCurveTo(x, y + h, x, y + h - r);
+    ctx.lineTo(x, y + r);
+    ctx.quadraticCurveTo(x, y, x + r, y);
+    ctx.closePath();
+  }
+
+  // ── Background ─────────────────────────────────────────────────────────────
+  const grad = ctx.createLinearGradient(0, 0, 0, H);
+  grad.addColorStop(0, '#111827');
+  grad.addColorStop(1, '#0d1117');
+  roundRect(0, 0, W, H, 24);
+  ctx.fillStyle = grad;
+  ctx.fill();
+
+  // Subtle top accent bar
+  ctx.fillStyle = '#818cf8';
+  roundRect(0, 0, W, 4, 0);
+  ctx.fill();
+
+  // ── Header ─────────────────────────────────────────────────────────────────
+  let y = 36;
+  ctx.fillStyle = '#818cf8';
+  ctx.font = `700 13px -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif`;
+  ctx.fillText('LIFTLOG', PADDING, y);
+
+  y += 34;
+  ctx.fillStyle = '#f9fafb';
+  ctx.font = `700 28px -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif`;
+  ctx.fillText(dayLabel, PADDING, y);
+
+  y += 22;
+  ctx.fillStyle = '#6b7280';
+  ctx.font = `400 13px -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif`;
+  ctx.fillText(dateStr, PADDING, y);
+
+  // ── Stat pills ─────────────────────────────────────────────────────────────
+  y += 28;
+  const stats = [
+    durationStr ? { val: durationStr, lbl: 'Duration' } : null,
+    { val: exIds.length, lbl: 'Exercises' },
+    { val: totalSets, lbl: 'Sets' },
+    { val: totalReps, lbl: 'Reps' },
+    prs.length ? { val: prs.length, lbl: prs.length === 1 ? 'PR' : 'PRs' } : null,
+  ].filter(Boolean);
+
+  const pillW = Math.floor((COL - (stats.length - 1) * 10) / stats.length);
+  const pillH = 58;
+  stats.forEach((st, i) => {
+    const px = PADDING + i * (pillW + 10);
+    roundRect(px, y, pillW, pillH, 10);
+    ctx.fillStyle = '#1f2937';
+    ctx.fill();
+    roundRect(px, y, pillW, pillH, 10);
+    ctx.strokeStyle = '#374151';
+    ctx.lineWidth = 1;
+    ctx.stroke();
+
+    ctx.textAlign = 'center';
+    ctx.fillStyle = '#818cf8';
+    ctx.font = `700 20px -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif`;
+    ctx.fillText(String(st.val), px + pillW / 2, y + 26);
+
+    ctx.fillStyle = '#6b7280';
+    ctx.font = `400 10px -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif`;
+    ctx.fillText(st.lbl.toUpperCase(), px + pillW / 2, y + 44);
+    ctx.textAlign = 'left';
+  });
+
+  y += pillH + 24;
+
+  // ── Health section ─────────────────────────────────────────────────────────
+  if (health) {
+    // Section label
+    ctx.fillStyle = '#4b5563';
+    ctx.font = `600 10px -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif`;
+    ctx.fillText('APPLE WATCH', PADDING, y);
+    y += 14;
+
+    const hStats = [
+      health.activeCalories != null ? { val: health.activeCalories, lbl: 'Active Cal' } : null,
+      health.totalCalories   != null ? { val: health.totalCalories,  lbl: 'Total Cal'  } : null,
+      health.avgHeartRate    != null ? { val: health.avgHeartRate,   lbl: 'Avg HR'     } : null,
+      health.peakHeartRate   != null ? { val: health.peakHeartRate,  lbl: 'Peak HR'    } : null,
+      health.minHeartRate    != null ? { val: health.minHeartRate,   lbl: 'Min HR'     } : null,
+      health.hrv             != null ? { val: health.hrv,            lbl: 'HRV (ms)'   } : null,
+    ].filter(Boolean);
+
+    const hCols = 3;
+    const hPillW = Math.floor((COL - (hCols - 1) * 10) / hCols);
+    const hPillH = 50;
+    hStats.forEach((st, i) => {
+      const col = i % hCols;
+      const row = Math.floor(i / hCols);
+      const px = PADDING + col * (hPillW + 10);
+      const py = y + row * (hPillH + 8);
+
+      roundRect(px, py, hPillW, hPillH, 10);
+      ctx.fillStyle = 'rgba(248,113,113,0.08)';
+      ctx.fill();
+      roundRect(px, py, hPillW, hPillH, 10);
+      ctx.strokeStyle = 'rgba(248,113,113,0.2)';
+      ctx.lineWidth = 1;
+      ctx.stroke();
+
+      ctx.textAlign = 'center';
+      ctx.fillStyle = '#f87171';
+      ctx.font = `700 18px -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif`;
+      ctx.fillText(String(st.val), px + hPillW / 2, py + 22);
+
+      ctx.fillStyle = '#6b7280';
+      ctx.font = `400 10px -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif`;
+      ctx.fillText(st.lbl.toUpperCase(), px + hPillW / 2, py + 38);
+      ctx.textAlign = 'left';
+    });
+
+    y += Math.ceil(hStats.length / hCols) * (hPillH + 8) + 20;
+  }
+
+  // ── Exercise rows ──────────────────────────────────────────────────────────
+  ctx.fillStyle = '#4b5563';
+  ctx.font = `600 10px -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif`;
+  ctx.fillText('EXERCISES', PADDING, y);
+  y += 14;
+
+  exIds.forEach(exId => {
+    const ex = S.bank[exId];
+    const sets = session.exercises[exId] || [];
+    const w = parseFloat(sets[0]?.weight) || 0;
+    const r = parseInt(sets[0]?.reps) || 0;
+    const n = sets.length;
+    const isPR = prs.includes(exId);
+    const e1rm = calc1RM(w, r);
+
+    roundRect(PADDING, y, COL, 38, 8);
+    ctx.fillStyle = '#1f2937';
+    ctx.fill();
+    roundRect(PADDING, y, COL, 38, 8);
+    ctx.strokeStyle = '#374151';
+    ctx.lineWidth = 1;
+    ctx.stroke();
+
+    // Name
+    ctx.fillStyle = '#f9fafb';
+    ctx.font = `600 13px -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif`;
+    ctx.fillText(ex?.name || exId, PADDING + 12, y + 15);
+
+    // PR badge
+    if (isPR) {
+      const nameW = ctx.measureText(ex?.name || exId).width;
+      const bx = PADDING + 12 + nameW + 8;
+      roundRect(bx, y + 5, 24, 14, 4);
+      ctx.fillStyle = 'rgba(251,146,60,0.2)';
+      ctx.fill();
+      ctx.fillStyle = '#fb923c';
+      ctx.font = `700 9px -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif`;
+      ctx.fillText('PR', bx + 4, y + 15);
+    }
+
+    // Stats
+    const statStr = `${n} sets · ${w}lb × ${r} reps${e1rm ? '  ·  E1RM ' + e1rm + 'lb' : ''}`;
+    ctx.fillStyle = '#6b7280';
+    ctx.font = `400 11px -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif`;
+    ctx.fillText(statStr, PADDING + 12, y + 29);
+
+    y += exLineH;
+  });
+
+  // ── Footer ─────────────────────────────────────────────────────────────────
+  y += 16;
+  ctx.fillStyle = '#374151';
+  ctx.fillRect(PADDING, y, COL, 1);
+  y += 14;
+  ctx.fillStyle = '#4b5563';
+  ctx.font = `400 11px -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif`;
+  ctx.textAlign = 'center';
+  ctx.fillText('liftlog · track your gains', W / 2, y);
+  ctx.textAlign = 'left';
+
+  // ── Share ──────────────────────────────────────────────────────────────────
+  canvas.toBlob(async blob => {
+    const file = new File([blob], `liftlog-${session.date || 'workout'}.png`, { type: 'image/png' });
+    if (navigator.share && navigator.canShare && navigator.canShare({ files: [file] })) {
+      try {
+        await navigator.share({ files: [file], title: `${dayLabel} — LiftLog` });
+      } catch(e) { if (e.name !== 'AbortError') fallbackDownload(canvas, session.date); }
+    } else {
+      fallbackDownload(canvas, session.date);
+    }
+  }, 'image/png');
+}
+
+function fallbackDownload(canvas, date) {
+  const a = document.createElement('a');
+  a.href = canvas.toDataURL('image/png');
+  a.download = `liftlog-${date || 'workout'}.png`;
+  a.click();
 }
 
 
