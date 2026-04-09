@@ -896,6 +896,110 @@ function cardBodyHTML(sets, exId, day) {
     <button class="add-set-btn" style="margin-top:6px" onclick="expandCard('${exId}','${day}')">Edit sets individually</button>`;
 }
 
+// Session history edit mode — reads/writes S.history session exercises
+function sessionEditCardBodyHTML(sets, sessionId, exId) {
+  const key = sessionId + exId;
+  const expanded = !!expandedCards[key];
+  if (expanded) {
+    const rows = sets.map((s, i) => `
+      <div class="set-row">
+        <div class="set-row-label">Set ${i + 1}</div>
+        <div class="set-field">
+          <div class="set-field-label">Weight (lbs)</div>
+          <input class="set-input" type="number" min="0" step="2.5" inputmode="decimal"
+            placeholder="0" value="${s.weight}"
+            onchange="updateHistorySetEntry('${sessionId}','${exId}',${i},'weight',this.value)">
+        </div>
+        <div class="set-field">
+          <div class="set-field-label">Reps</div>
+          <input class="set-input" type="number" min="1" step="1" inputmode="numeric"
+            placeholder="0" value="${s.reps}"
+            onchange="updateHistorySetEntry('${sessionId}','${exId}',${i},'reps',this.value)">
+        </div>
+        ${sets.length > 1 ? `<button class="remove-set-btn" onclick="removeHistorySet('${sessionId}','${exId}',${i})">−</button>` : ''}
+      </div>`).join('');
+    return rows +
+      `<button class="add-set-btn" onclick="addHistorySet('${sessionId}','${exId}')">+ Add Set</button>
+       <button class="add-set-btn" style="margin-top:4px;border-style:solid;color:var(--muted)" onclick="collapseHistoryCard('${sessionId}','${exId}')">Collapse</button>`;
+  }
+  const w = sets[0]?.weight ?? '', r = sets[0]?.reps ?? '', n = sets.length;
+  return `
+    <div class="set-row" style="align-items:flex-end">
+      <div class="set-field">
+        <div class="set-field-label">Weight (lbs)</div>
+        <input class="set-input" type="number" min="0" step="2.5" inputmode="decimal"
+          placeholder="0" value="${w}"
+          onchange="updateHistoryEntry('${sessionId}','${exId}','weight',this.value)">
+      </div>
+      <div class="set-field">
+        <div class="set-field-label">Reps</div>
+        <input class="set-input" type="number" min="1" step="1" inputmode="numeric"
+          placeholder="0" value="${r}"
+          onchange="updateHistoryEntry('${sessionId}','${exId}','reps',this.value)">
+      </div>
+      <div class="sets-counter">
+        <div class="sets-counter-label">Sets</div>
+        <div class="sets-counter-control">
+          <button class="sets-counter-btn" onclick="changeHistorySetCount('${sessionId}','${exId}',-1)">−</button>
+          <div class="sets-counter-val" id="sedit-n-${sessionId}-${exId}">${n}</div>
+          <button class="sets-counter-btn" onclick="changeHistorySetCount('${sessionId}','${exId}',+1)">+</button>
+        </div>
+      </div>
+    </div>
+    <button class="add-set-btn" style="margin-top:6px" onclick="expandHistoryCard('${sessionId}','${exId}')">Edit sets individually</button>`;
+}
+
+function refreshSessionExRow(sessionId, exId) {
+  const s = S.history.find(h => h.id === sessionId); if (!s) return;
+  const sets = s.exercises[exId] || [];
+  const el = document.querySelector(`.sedit-body[data-sid="${sessionId}"][data-exid="${exId}"]`);
+  if (el) el.innerHTML = sessionEditCardBodyHTML(sets, sessionId, exId);
+}
+
+function updateHistoryEntry(sessionId, exId, field, val) {
+  const s = S.history.find(h => h.id === sessionId); if (!s) return;
+  const parsed = val === '' ? '' : parseFloat(val) || val;
+  s.exercises[exId].forEach(set => set[field] = parsed);
+}
+
+function updateHistorySetEntry(sessionId, exId, idx, field, val) {
+  const s = S.history.find(h => h.id === sessionId); if (!s) return;
+  s.exercises[exId][idx][field] = val === '' ? '' : parseFloat(val) || val;
+}
+
+function changeHistorySetCount(sessionId, exId, delta) {
+  const s = S.history.find(h => h.id === sessionId); if (!s) return;
+  const sets = s.exercises[exId];
+  if (delta > 0) { const last = sets.slice(-1)[0] || { weight:'', reps:'' }; sets.push({ weight: last.weight, reps: last.reps }); }
+  else if (delta < 0 && sets.length > 1) { sets.pop(); }
+  const el = document.getElementById(`sedit-n-${sessionId}-${exId}`);
+  if (el) el.textContent = sets.length;
+}
+
+function addHistorySet(sessionId, exId) {
+  const s = S.history.find(h => h.id === sessionId); if (!s) return;
+  const last = s.exercises[exId].slice(-1)[0] || { weight:'', reps:'' };
+  s.exercises[exId].push({ weight: last.weight, reps: last.reps });
+  refreshSessionExRow(sessionId, exId);
+}
+
+function removeHistorySet(sessionId, exId, idx) {
+  const s = S.history.find(h => h.id === sessionId); if (!s) return;
+  if (s.exercises[exId].length <= 1) return;
+  s.exercises[exId].splice(idx, 1);
+  refreshSessionExRow(sessionId, exId);
+}
+
+function expandHistoryCard(sessionId, exId) {
+  expandedCards[sessionId + exId] = true;
+  refreshSessionExRow(sessionId, exId);
+}
+
+function collapseHistoryCard(sessionId, exId) {
+  expandedCards[sessionId + exId] = false;
+  refreshSessionExRow(sessionId, exId);
+}
+
 function refreshCardBody(exId, day) {
   const sets = S.session[day][exId];
   const html = cardBodyHTML(sets, exId, day);
@@ -1072,6 +1176,7 @@ function sessionBodyHTML(session, editing=false) {
     const isPR = w > 0 && w >= pr;
 
     if (editing) {
+      const bodyHtml = sessionEditCardBodyHTML(sets, session.id, exId);
       return `
         <div class="session-ex-row" data-exid="${exId}">
           <div class="session-ex-header">
@@ -1082,26 +1187,7 @@ function sessionBodyHTML(session, editing=false) {
               <button class="btn-danger-sm" onclick="removeSessionExercise('${session.id}','${exId}')">Remove</button>
             </div>
           </div>
-          <div class="set-control-row" style="margin-top:8px">
-            <div class="set-field">
-              <div class="set-field-label">Weight (lbs)</div>
-              <input class="set-input" type="number" inputmode="decimal" value="${w}" id="sedit-w-${session.id}-${exId}"
-                style="font-size:14px" onchange="updateSessionEntry('${session.id}','${exId}')">
-            </div>
-            <div class="set-field">
-              <div class="set-field-label">Reps</div>
-              <input class="set-input" type="number" inputmode="numeric" value="${r}" id="sedit-r-${session.id}-${exId}"
-                style="font-size:14px" onchange="updateSessionEntry('${session.id}','${exId}')">
-            </div>
-            <div class="sets-counter">
-              <div class="sets-counter-label">Sets</div>
-              <div class="sets-counter-control">
-                <button class="sets-counter-btn" onclick="changeSessionSets('${session.id}','${exId}',-1)">−</button>
-                <div class="sets-counter-val" id="sedit-n-${session.id}-${exId}">${n}</div>
-                <button class="sets-counter-btn" onclick="changeSessionSets('${session.id}','${exId}',+1)">+</button>
-              </div>
-            </div>
-          </div>
+          <div class="sedit-body" data-sid="${session.id}" data-exid="${exId}" style="margin-top:8px">${bodyHtml}</div>
         </div>`;
     }
 
@@ -1144,7 +1230,7 @@ function setSessionView(id, editing) {
   const s = S.history.find(h => h.id===id); if (!s) return;
   const body = document.getElementById(`sbody-${id}`);
   const foot = document.getElementById(`sfoot-${id}`);
-  if (body) body.innerHTML = sessionBodyHTML(s, editing);
+  if (body) { body.innerHTML = sessionBodyHTML(s, editing); if (editing) attachCardBodyTouchHandler(body); }
   if (foot) foot.innerHTML = sessionFooterHTML(s, editing);
   if (editing) initSessionSortable(id, s);
 }
@@ -1184,24 +1270,6 @@ function refreshSessionEditBody(sessionId) {
   setSessionView(sessionId, true);
 }
 
-function updateSessionEntry(sessionId, exId) {
-  const s = S.history.find(h => h.id===sessionId); if (!s) return;
-  const w = parseFloat(document.getElementById(`sedit-w-${sessionId}-${exId}`)?.value)||0;
-  const r = parseInt(document.getElementById(`sedit-r-${sessionId}-${exId}`)?.value)||0;
-  const n = parseInt(document.getElementById(`sedit-n-${sessionId}-${exId}`)?.textContent)||1;
-  const sets = [];
-  for (let i=0; i<n; i++) sets.push({ weight: w, reps: r });
-  s.exercises[exId] = sets;
-}
-
-function changeSessionSets(sessionId, exId, delta) {
-  const s = S.history.find(h => h.id===sessionId); if (!s) return;
-  const el = document.getElementById(`sedit-n-${sessionId}-${exId}`); if (!el) return;
-  const current = parseInt(el.textContent)||1;
-  const next = Math.max(1, Math.min(20, current+delta));
-  el.textContent = next;
-  updateSessionEntry(sessionId, exId);
-}
 
 function removeSessionExercise(sessionId, exId) {
   const s = S.history.find(h => h.id===sessionId); if (!s) return;
@@ -1214,8 +1282,8 @@ function saveSessionEdits(id) {
   // Save date
   const dateInput = document.getElementById(`date-edit-${id}`);
   if (dateInput?.value) s.date = dateInput.value;
-  // Flush all inputs before saving (in case onchange didn't fire on mobile)
-  Object.keys(s.exercises).forEach(exId => updateSessionEntry(id, exId));
+  // Flush any pending input changes (onchange may not fire on mobile before save tap)
+  document.querySelectorAll(`#sbody-${id} input.set-input`).forEach(el => el.dispatchEvent(new Event('change')));
   editingSessions[id] = false;
   openSessions[id] = false;
   save();
@@ -1939,8 +2007,21 @@ function renderWorkoutCards() {
   const day = WK.day;
   const last = getLastSession(day);
   const cards = S.split[day].map(id => workoutCardHTML(id, day, last)).join('');
-  document.getElementById('wk-scroll').innerHTML =
-    timerCardHTML() + (cards || '<div class="empty-state">No exercises — tap + Add</div>');
+  const scroll = document.getElementById('wk-scroll');
+  scroll.innerHTML = timerCardHTML() + (cards || '<div class="empty-state">No exercises — tap + Add</div>');
+  attachCardBodyTouchHandler(scroll);
+}
+
+function attachCardBodyTouchHandler(container) {
+  container._cardTouchHandler && container.removeEventListener('touchend', container._cardTouchHandler);
+  container._cardTouchHandler = function(e) {
+    const btn = e.target.closest('.add-set-btn, .remove-set-btn, .sets-counter-btn');
+    if (!btn) return;
+    // Don't double-fire if click also fires
+    e.preventDefault();
+    btn.onclick && btn.onclick.call(btn, e);
+  };
+  container.addEventListener('touchend', container._cardTouchHandler, { passive: false });
 }
 
 function timerCardHTML() {
