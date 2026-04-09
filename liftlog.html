@@ -2527,16 +2527,18 @@ function shareWorkoutCard() {
     prs.length ? { val: prs.length, lbl: prs.length === 1 ? 'PR' : 'PRs' } : null,
   ].filter(Boolean);
 
-  const hStats = health ? [
+  const hCalRow = health ? [
     health.activeCalories != null ? { val: health.activeCalories, lbl: 'Active Cal' } : null,
     health.totalCalories  != null ? { val: health.totalCalories,  lbl: 'Total Cal'  } : null,
-    health.avgHeartRate   != null ? { val: health.avgHeartRate,   lbl: 'Avg HR'     } : null,
-    health.peakHeartRate  != null ? { val: health.peakHeartRate,  lbl: 'Peak HR'    } : null,
-    health.hrv            != null ? { val: health.hrv,            lbl: 'HRV (ms)'   } : null,
   ].filter(Boolean) : [];
 
-  const hCols = 3;
-  const hRows = hStats.length ? Math.ceil(hStats.length / hCols) : 0;
+  const hHRRow = health ? [
+    health.avgHeartRate  != null ? { val: health.avgHeartRate,  lbl: 'Avg HR'   } : null,
+    health.peakHeartRate != null ? { val: health.peakHeartRate, lbl: 'Peak HR'  } : null,
+    health.hrv           != null ? { val: health.hrv,           lbl: 'HRV (ms)' } : null,
+  ].filter(Boolean) : [];
+
+  const hRowCount = (hCalRow.length ? 1 : 0) + (hHRRow.length ? 1 : 0);
 
   const H = 44            // top padding
     + 32                  // LIFTLOG label
@@ -2544,7 +2546,7 @@ function shareWorkoutCard() {
     + 20                  // date
     + 28                  // gap before stat pills
     + PILL_H              // stat pills
-    + (hStats.length ? 32 + hRows * (PILL_H + GAP) : 0)  // health label + pills
+    + (hRowCount ? 32 + hRowCount * (PILL_H + GAP) : 0)  // health label + rows
     + 44;                 // footer
 
   const canvas = document.createElement('canvas');
@@ -2615,35 +2617,34 @@ function shareWorkoutCard() {
   y += PILL_H;
 
   // Health pills
-  if (hStats.length) {
+  if (hRowCount) {
     y += 24;
     ctx.fillStyle = '#4b5563';
     ctx.font = `600 10px -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif`;
     ctx.fillText('APPLE WATCH', PADDING, y);
     y += 12;
 
-    const hPillW = Math.floor((COL - (hCols - 1) * GAP) / hCols);
-    hStats.forEach((st, i) => {
-      const col = i % hCols;
-      const row = Math.floor(i / hCols);
-      const px = PADDING + col * (hPillW + GAP);
-      const py = y + row * (PILL_H + GAP);
+    function drawHRow(row) {
+      const n = row.length;
+      const pw = Math.floor((COL - (n - 1) * GAP) / n);
+      row.forEach((st, i) => {
+        const px = PADDING + i * (pw + GAP);
+        rr(px, y, pw, PILL_H, 12); ctx.fillStyle = 'rgba(248,113,113,0.08)'; ctx.fill();
+        rr(px, y, pw, PILL_H, 12); ctx.strokeStyle = 'rgba(248,113,113,0.2)'; ctx.lineWidth = 1; ctx.stroke();
+        ctx.textAlign = 'center';
+        ctx.fillStyle = '#f87171';
+        ctx.font = `700 26px -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif`;
+        ctx.fillText(String(st.val), px + pw / 2, y + 36);
+        ctx.fillStyle = '#6b7280';
+        ctx.font = `500 11px -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif`;
+        ctx.fillText(st.lbl.toUpperCase(), px + pw / 2, y + 58);
+        ctx.textAlign = 'left';
+      });
+      y += PILL_H + GAP;
+    }
 
-      rr(px, py, hPillW, PILL_H, 12); ctx.fillStyle = 'rgba(248,113,113,0.08)'; ctx.fill();
-      rr(px, py, hPillW, PILL_H, 12); ctx.strokeStyle = 'rgba(248,113,113,0.2)'; ctx.lineWidth = 1; ctx.stroke();
-
-      ctx.textAlign = 'center';
-      ctx.fillStyle = '#f87171';
-      ctx.font = `700 26px -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif`;
-      ctx.fillText(String(st.val), px + hPillW / 2, py + 36);
-
-      ctx.fillStyle = '#6b7280';
-      ctx.font = `500 11px -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif`;
-      ctx.fillText(st.lbl.toUpperCase(), px + hPillW / 2, py + 58);
-      ctx.textAlign = 'left';
-    });
-
-    y += hRows * (PILL_H + GAP);
+    if (hCalRow.length) drawHRow(hCalRow);
+    if (hHRRow.length)  drawHRow(hHRRow);
   }
 
   // Footer
