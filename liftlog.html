@@ -2633,6 +2633,9 @@ function shareWorkoutCard() {
   const COL = W - PADDING * 2;
   const GAP = 12;
   const PILL_H = 80;
+  const HR_CHART_H = 80;
+
+  const hasHRChart = !!(health?.hrTimeline?.length > 1);
 
   const stats = [
     durationStr ? { val: durationStr, lbl: 'Duration' } : null,
@@ -2662,6 +2665,7 @@ function shareWorkoutCard() {
     + 28                  // gap before stat pills
     + PILL_H              // stat pills
     + (hRowCount ? 32 + hRowCount * (PILL_H + GAP) : 0)  // health label + rows
+    + (hasHRChart ? 36 + HR_CHART_H + GAP : 0)           // HR timeline chart
     + 44;                 // footer
 
   const canvas = document.createElement('canvas');
@@ -2760,6 +2764,66 @@ function shareWorkoutCard() {
 
     if (hCalRow.length) drawHRow(hCalRow);
     if (hHRRow.length)  drawHRow(hHRRow);
+  }
+
+  // HR timeline chart
+  if (hasHRChart) {
+    const hrData = health.hrTimeline;
+    y += 24;
+    ctx.fillStyle = '#4b5563';
+    ctx.font = `600 10px -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif`;
+    ctx.fillText('HEART RATE TIMELINE', PADDING, y);
+    y += 12;
+
+    const CP = 8; // chart inner padding
+    const minHR = Math.min(...hrData), maxHR = Math.max(...hrData);
+    const hrRange = maxHR - minHR || 1;
+    const cLeft = PADDING + CP, cRight = PADDING + COL - CP;
+    const cTop = y + CP, cBot = y + HR_CHART_H - CP;
+    const cW = cRight - cLeft, cH = cBot - cTop;
+
+    // Card background
+    rr(PADDING, y, COL, HR_CHART_H, 12);
+    ctx.fillStyle = 'rgba(248,113,113,0.06)'; ctx.fill();
+    rr(PADDING, y, COL, HR_CHART_H, 12);
+    ctx.strokeStyle = 'rgba(248,113,113,0.15)'; ctx.lineWidth = 1; ctx.stroke();
+
+    // Map points
+    const pts = hrData.map((v, i) => ({
+      x: cLeft + (i / (hrData.length - 1)) * cW,
+      y: cBot - ((v - minHR) / hrRange) * cH
+    }));
+
+    // Fill area under line
+    ctx.beginPath();
+    ctx.moveTo(pts[0].x, cBot);
+    for (let i = 1; i < pts.length; i++) {
+      const mx = (pts[i - 1].x + pts[i].x) / 2;
+      ctx.bezierCurveTo(mx, pts[i - 1].y, mx, pts[i].y, pts[i].x, pts[i].y);
+    }
+    ctx.lineTo(pts[pts.length - 1].x, cBot);
+    ctx.closePath();
+    ctx.fillStyle = 'rgba(248,113,113,0.18)'; ctx.fill();
+
+    // Line
+    ctx.beginPath();
+    ctx.moveTo(pts[0].x, pts[0].y);
+    for (let i = 1; i < pts.length; i++) {
+      const mx = (pts[i - 1].x + pts[i].x) / 2;
+      ctx.bezierCurveTo(mx, pts[i - 1].y, mx, pts[i].y, pts[i].x, pts[i].y);
+    }
+    ctx.strokeStyle = '#f87171'; ctx.lineWidth = 2;
+    ctx.lineJoin = 'round'; ctx.lineCap = 'round'; ctx.stroke();
+
+    // Min / max labels
+    ctx.fillStyle = 'rgba(107,114,128,0.9)';
+    ctx.font = `500 9px -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif`;
+    ctx.textAlign = 'right';
+    ctx.fillText(Math.round(maxHR) + ' bpm', PADDING + COL - 4, cTop + 9);
+    ctx.fillText(Math.round(minHR) + ' bpm', PADDING + COL - 4, cBot);
+    ctx.textAlign = 'left';
+
+    y += HR_CHART_H + GAP;
   }
 
   // Footer
