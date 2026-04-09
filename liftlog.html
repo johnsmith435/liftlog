@@ -2486,11 +2486,19 @@ function importHealthData(histId) {
         // Detect Health Auto Export: data.data.workouts
         const haeData = data.data || data;
         if (haeData.workouts && Array.isArray(haeData.workouts) && haeData.workouts.length > 0) {
+          // Safari can't parse "2026-04-09 07:01:44 -0400" — convert to ISO 8601
+          const parseHAEDate = str => {
+            if (!str) return new Date(0);
+            // "YYYY-MM-DD HH:MM:SS ±HHMM" → "YYYY-MM-DDTHH:MM:SS±HH:MM"
+            const iso = str.replace(' ', 'T').replace(' ', '').replace(/([+-])(\d{2})(\d{2})$/, '$1$2:$3');
+            return new Date(iso);
+          };
+
           // Filter to strength training workouts only, pick the most recent by start time
           const strength = haeData.workouts.filter(w => w.name === 'Traditional Strength Training');
           const pool = strength.length ? strength : haeData.workouts;
           const w = pool.reduce((best, cur) =>
-            new Date(cur.start || 0) > new Date(best.start || 0) ? cur : best
+            parseHAEDate(cur.start) > parseHAEDate(best.start) ? cur : best
           );
 
           activeCal    = w.activeEnergyBurned?.qty ?? null;
@@ -2498,25 +2506,21 @@ function importHealthData(histId) {
           peakHR       = w.heartRate?.max?.qty ?? w.maxHeartRate?.qty ?? null;
           startTime    = w.start ?? null;
           durationSecs = w.duration ?? null;
-
-          // Total cal = active + basal (basal from metrics if available)
-          const metrics = haeData.metrics || [];
-          const basalMetric = metrics.find(m => m.name === 'basal_energy_burned');
-          const basalCal = basalMetric?.data?.[0]?.qty ?? null;
-          totalCal = (activeCal != null && basalCal != null) ? activeCal + basalCal : null;
+          // totalCal omitted: HAE metrics only provide daily basal (~1400 kcal), not workout-scoped basal
 
           // HRV from daily metrics
+          const metrics = haeData.metrics || [];
           const hrvMetric = metrics.find(m => m.name === 'heart_rate_variability');
           hrv = hrvMetric?.data?.[0]?.qty ?? null;
 
           // Per-minute HR timeline from heartRateData[]
           if (Array.isArray(w.heartRateData) && w.heartRateData.length > 1) {
-            // Sort by date ascending
-            const sorted = [...w.heartRateData].sort((a, b) => new Date(a.date) - new Date(b.date));
-            const t0 = new Date(sorted[0].date).getTime();
+            // Sort by date ascending using Safari-safe parser
+            const sorted = [...w.heartRateData].sort((a, b) => parseHAEDate(a.date) - parseHAEDate(b.date));
+            const t0 = parseHAEDate(sorted[0].date).getTime();
             hrTimeline = sorted.map(d => Math.round(d.Avg));
             hrTimelineLabels = sorted.map(d => {
-              const mins = Math.round((new Date(d.date).getTime() - t0) / 60000);
+              const mins = Math.round((parseHAEDate(d.date).getTime() - t0) / 60000);
               return mins + 'm';
             });
           }
