@@ -2252,10 +2252,12 @@ function importHealthData(histId) {
         const peakHR     = pick('peakheartrate','maxheartrate','maximumheartrate','peakhr','maximumhr','maxhr');
         const startTime  = pick('starttime','startdate','start');
 
+        // Always show the raw keys found — helps diagnose mismatches
+        const rawKeys = Object.keys(h).join(', ');
+
         // Use != null so 0 values still pass
         if (activeCal == null && avgHR == null) {
-          const keys = Object.keys(h).join(', ');
-          showToast(`Keys found: ${keys || 'none'} — check format`, 'error');
+          showToast(`No match. Raw keys: ${rawKeys || 'none'}`, 'error');
           return;
         }
 
@@ -2279,7 +2281,13 @@ function importHealthData(histId) {
         };
         save();
         renderSummaryBody();
-        showToast('Apple Watch data imported', 'success');
+        const imported = [
+          activeCal != null ? `cal:${Math.round(activeCal)}` : null,
+          avgHR != null ? `avgHR:${Math.round(avgHR)}` : null,
+          peakHR != null ? `peakHR:${Math.round(peakHR)}` : null,
+          hrTimeline ? `timeline:${hrTimeline.length}pts` : null,
+        ].filter(Boolean).join(', ');
+        showToast(`Imported: ${imported || 'no values matched'}`, 'success');
       } catch(err) { showToast('Could not parse file: ' + err.message, 'error'); }
     };
     reader.readAsText(file);
