@@ -2772,6 +2772,27 @@ function showToast(msg, type='success') {
   _tt = setTimeout(() => el.classList.remove('show'), 3000);
 }
 
+// ── Scroll-tap guard — prevents buttons firing during a scroll gesture ──────
+// If finger moves more than SCROLL_THRESHOLD px vertically, suppress the tap.
+;(function() {
+  const SCROLL_THRESHOLD = 6;
+  let _ty = null, _scrolled = false;
+  document.addEventListener('touchstart', e => {
+    _ty = e.touches[0].clientY;
+    _scrolled = false;
+  }, { passive: true });
+  document.addEventListener('touchmove', e => {
+    if (_ty !== null && Math.abs(e.touches[0].clientY - _ty) > SCROLL_THRESHOLD) _scrolled = true;
+  }, { passive: true });
+  document.addEventListener('touchend', e => {
+    if (_scrolled) {
+      const btn = e.target.closest('.add-set-btn');
+      if (btn) { e.preventDefault(); e.stopImmediatePropagation(); }
+    }
+    _ty = null;
+  }, { capture: true });
+})();
+
 // ── Init ───────────────────────────────────────────────────────────────────
 document.getElementById('header-date').textContent =
   new Date().toLocaleDateString('en-US',{ weekday:'long', month:'long', day:'numeric' });
