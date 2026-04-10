@@ -824,15 +824,15 @@ function dayHTML(day) {
         <div class="day-title" style="color:var(--${COLOR[day]})">${LABEL[day]}</div>
         <div class="day-subtitle">${last ? 'Last logged: '+formatDateShort(last.date) : 'No previous sessions'}</div>
       </div>
-      <div style="display:flex;gap:6px">
-        <button class="btn btn-ghost" onclick="openReorder('${day}')">${svg(ICO.drag,12)} Reorder</button>
-        <button class="btn btn-ghost" onclick="openBankModal(null,'${day}')">${svg(ICO.plus)} Add</button>
-      </div>
     </div>
     <div class="workout-actions" style="margin-top:0;margin-bottom:16px">
       <button class="btn btn-primary" onclick="startWorkout('${day}')" style="flex:1">${svg(ICO.check)} Start Workout</button>
-      <button class="btn btn-ghost"   onclick="logWorkout('${day}')">Quick Log</button>
-      <button class="btn btn-ghost"   onclick="clearDay('${day}')">Clear</button>
+    </div>
+    <div class="workout-actions" style="margin-top:0;margin-bottom:16px">
+      <button class="btn btn-ghost" style="flex:1;justify-content:center" onclick="logWorkout('${day}')">Quick Log</button>
+      <button class="btn btn-ghost" style="flex:1;justify-content:center" onclick="openBankModal(null,'${day}')">${svg(ICO.plus)} Add</button>
+      <button class="btn btn-ghost" style="flex:1;justify-content:center" onclick="openReorder('${day}')">${svg(ICO.drag,12)} Reorder</button>
+      <button class="btn btn-ghost" style="flex:1;justify-content:center" onclick="clearDay('${day}')">Clear</button>
     </div>
     <div class="exercises-list" id="list-${day}">${cards}</div>
     ${sessionHistoryHTML(day, daySessions)}`;
