@@ -400,7 +400,7 @@
       Hide
     </button>
     <div class="workout-title" id="wk-title"></div>
-    <button class="btn btn-ghost" style="padding:6px 14px;font-size:12px" onclick="openWkReorder()">Reorder</button>
+    <button class="btn btn-ghost" style="padding:6px 14px;font-size:12px" onclick="openReorder(WK.day)">Reorder</button>
   </div>
   <div class="workout-scroll" id="wk-scroll"></div>
   <div class="workout-footer">
@@ -426,7 +426,7 @@
   <div style="background:var(--card);border-radius:var(--r) var(--r) 0 0;width:100%;max-width:620px;padding:16px 16px max(20px,env(safe-area-inset-bottom))">
     <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px">
       <div style="font-size:15px;font-weight:700">Reorder Exercises</div>
-      <button class="btn btn-ghost" style="padding:5px 14px;font-size:13px" onclick="closeWkReorder()">Done</button>
+      <button class="btn btn-ghost" style="padding:5px 14px;font-size:13px" onclick="closeReorder()">Done</button>
     </div>
     <div id="wk-reorder-list"></div>
   </div>
@@ -804,7 +804,6 @@ function render() {
     initCharts();
   } else {
     main.innerHTML = dayHTML(S.activeDay);
-    initSortable(S.activeDay);
   }
 }
 
@@ -830,6 +829,7 @@ function dayHTML(day) {
     <div class="workout-actions" style="margin-top:0;margin-bottom:16px">
       <button class="btn btn-primary" onclick="startWorkout('${day}')" style="flex:1">${svg(ICO.check)} Start Workout</button>
       <button class="btn btn-ghost"   onclick="logWorkout('${day}')">Quick Log</button>
+      <button class="btn btn-ghost"   onclick="openReorder('${day}')">Reorder</button>
       <button class="btn btn-ghost"   onclick="clearDay('${day}')">Clear</button>
     </div>
     <div class="exercises-list" id="list-${day}">${cards}</div>
@@ -883,7 +883,6 @@ function cardHTML(exId, day, lastSession) {
   return `
     <div class="exercise-card" data-id="${exId}">
       <div class="card-header">
-        <div class="drag-handle">${svg(ICO.drag,14)}</div>
         <div class="card-name">${ex.name}${caliLink}</div>
         <div class="card-actions">
           ${infoBtn}
@@ -2152,14 +2151,15 @@ function renderWorkoutCards() {
 }
 
 let _wkSortable = null;
-function openWkReorder() {
+let _reorderDay = null;
+function openReorder(day) {
+  _reorderDay = day;
   const overlay = document.getElementById('wk-reorder-overlay');
   const list = document.getElementById('wk-reorder-list');
-  const day = WK.day;
   list.innerHTML = S.split[day].map(id => {
     const ex = S.bank[id];
-    return `<div class="wk-card" data-id="${id}" style="margin-bottom:8px;display:flex;align-items:center;gap:10px;padding:12px 14px;cursor:default">
-      <div class="drag-handle" style="flex-shrink:0">${svg(ICO.drag,14)}</div>
+    return `<div data-id="${id}" style="background:var(--card);border:1px solid var(--border);border-radius:var(--r);margin-bottom:8px;display:flex;align-items:center;gap:10px;padding:12px 14px">
+      <div class="drag-handle" style="flex-shrink:0;touch-action:none">${svg(ICO.drag,14)}</div>
       <div style="font-size:14px;font-weight:600;flex:1">${ex?.name||id}</div>
     </div>`;
   }).join('');
@@ -2168,7 +2168,7 @@ function openWkReorder() {
   _wkSortable = Sortable.create(list, {
     animation: 140, handle: '.drag-handle', ghostClass: 'sortable-ghost',
     onEnd(evt) {
-      const arr = S.split[day];
+      const arr = S.split[_reorderDay];
       const [moved] = arr.splice(evt.oldIndex, 1);
       arr.splice(evt.newIndex, 0, moved);
       save();
@@ -2176,10 +2176,10 @@ function openWkReorder() {
   });
 }
 
-function closeWkReorder() {
+function closeReorder() {
   document.getElementById('wk-reorder-overlay').style.display = 'none';
   if (_wkSortable) { try { _wkSortable.destroy(); } catch(e) {} _wkSortable = null; }
-  renderWorkoutCards();
+  if (WK.day) renderWorkoutCards(); else render();
 }
 
 // Scoped touchend delegate for #wk-scroll.
