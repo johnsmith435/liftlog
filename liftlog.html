@@ -1075,7 +1075,10 @@ function collapseHistoryCard(sessionId, exId) {
 function refreshCardBody(exId, day) {
   const sets = S.session[day][exId];
   const html = cardBodyHTML(sets, exId, day);
-  const card = document.querySelector(`.exercise-card[data-id="${exId}"], .wk-card[data-id="${exId}"]`);
+  // Prefer workout overlay card when active — querySelector finds main UI card first in DOM order
+  const card = WK.day
+    ? document.querySelector(`#wk-scroll .wk-card[data-id="${exId}"]`)
+    : document.querySelector(`.exercise-card[data-id="${exId}"]`);
   if (card) {
     const body = card.querySelector('.card-body, .wk-card-body');
     if (body) body.innerHTML = html;
@@ -2142,13 +2145,18 @@ function initWorkoutSortable() {
   if (_wkSortable) { try { _wkSortable.destroy(); } catch(e) {} _wkSortable = null; }
   const el = document.getElementById('wk-exercises');
   if (!el) return;
+  const scrollEl = document.getElementById('wk-scroll');
   _wkSortable = Sortable.create(el, {
     animation: 140,
     handle: '.drag-handle',
     ghostClass: 'sortable-ghost',
     delay: 200,
     delayOnTouchOnly: true,
+    onStart() {
+      if (scrollEl) scrollEl.style.overflow = 'hidden';
+    },
     onEnd(evt) {
+      if (scrollEl) scrollEl.style.overflow = '';
       const arr = S.split[WK.day];
       const [moved] = arr.splice(evt.oldIndex, 1);
       arr.splice(evt.newIndex, 0, moved);
