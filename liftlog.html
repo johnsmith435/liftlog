@@ -2146,18 +2146,16 @@ function initWorkoutSortable() {
   if (_wkSortable) { try { _wkSortable.destroy(); } catch(e) {} _wkSortable = null; }
   const el = document.getElementById('wk-exercises');
   if (!el) return;
-  const scrollEl = document.getElementById('wk-scroll');
   _wkSortable = Sortable.create(el, {
     animation: 140,
     handle: '.drag-handle',
     ghostClass: 'sortable-ghost',
     delay: 200,
     delayOnTouchOnly: true,
-    onStart() {
-      if (scrollEl) scrollEl.style.overflow = 'hidden';
-    },
+    forceFallback: true,
+    fallbackOnBody: true,
+    fallbackTolerance: 5,
     onEnd(evt) {
-      if (scrollEl) scrollEl.style.overflow = '';
       const arr = S.split[WK.day];
       const [moved] = arr.splice(evt.oldIndex, 1);
       arr.splice(evt.newIndex, 0, moved);
