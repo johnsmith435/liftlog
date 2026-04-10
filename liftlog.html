@@ -889,6 +889,18 @@ function cardHTML(exId, day, lastSession) {
 }
 
 // ── Description toggle ─────────────────────────────────────────────────────
+function toggleWkDesc(exId) {
+  const key = exId + 'wk';
+  openDescs[key] = !openDescs[key];
+  const el = document.getElementById(`desc-${exId}-wk`);
+  if (el) el.classList.toggle('open', openDescs[key]);
+  const card = document.querySelector(`#wk-scroll .wk-card[data-id="${exId}"]`);
+  if (card) {
+    const btn = card.querySelector(`button[onclick*="toggleWkDesc"]`);
+    if (btn) btn.classList.toggle('is-active', openDescs[key]);
+  }
+}
+
 function toggleDesc(exId, day) {
   const key = exId+day;
   openDescs[key] = !openDescs[key];
@@ -2121,19 +2133,26 @@ function renderWorkoutCards() {
   const cards = S.split[day].map(id => workoutCardHTML(id, day, last)).join('');
   const scroll = document.getElementById('wk-scroll');
   scroll.innerHTML = timerCardHTML() + (cards || '<div class="empty-state">No exercises — tap + Add</div>');
-  attachCardBodyTouchHandler(scroll);
+  initWorkoutSortable();
 }
 
-function attachCardBodyTouchHandler(container) {
-  container._cardTouchHandler && container.removeEventListener('touchend', container._cardTouchHandler);
-  container._cardTouchHandler = function(e) {
-    const btn = e.target.closest('.add-set-btn, .remove-set-btn, .sets-counter-btn');
-    if (!btn) return;
-    // Don't double-fire if click also fires
-    e.preventDefault();
-    btn.onclick && btn.onclick.call(btn, e);
-  };
-  container.addEventListener('touchend', container._cardTouchHandler, { passive: false });
+function initWorkoutSortable() {
+  const el = document.getElementById('wk-scroll');
+  if (!el) return;
+  Sortable.create(el, {
+    animation: 140, handle: '.drag-handle', ghostClass: 'sortable-ghost',
+    filter: '#wk-timer-card',
+    onEnd(evt) {
+      // Adjust for the timer card at index 0
+      const arr = S.split[WK.day];
+      const from = evt.oldIndex - 1;
+      const to   = evt.newIndex - 1;
+      if (from < 0 || to < 0 || from === to) return;
+      const [moved] = arr.splice(from, 1);
+      arr.splice(to, 0, moved);
+      save();
+    }
+  });
 }
 
 function timerCardHTML() {
@@ -2197,19 +2216,27 @@ function workoutCardHTML(exId, day, lastSession) {
     ? `<a class="cali-link" href="${ex.caliUrl}" target="_blank" rel="noopener" onclick="event.stopPropagation()">${svg(ICO.ext,9)}</a>`
     : '';
 
+  const isDescOpen = !!openDescs[exId + 'wk'];
+  const descHTML = ex.desc
+    ? `<div class="card-desc ${isDescOpen?'open':''}" id="desc-${exId}-wk">${ex.desc}${ex.caliUrl ? `<br><a class="desc-src" href="${ex.caliUrl}" target="_blank" rel="noopener" onclick="event.stopPropagation()">View on Calistree ↗</a>` : ''}</div>`
+    : '';
+
   return `
     <div class="wk-card ${isDone?'done':''}" data-id="${exId}">
       <div class="wk-card-header">
+        <div class="drag-handle">${svg(ICO.drag,14)}</div>
         <button class="wk-done-btn ${isDone?'checked':''}" onclick="toggleWkDone('${exId}')" title="Mark complete">
           ${isDone ? svg(ICO.check, 11) : ''}
         </button>
         <div class="wk-card-name">${ex.name}${caliLink}</div>
         ${isDone ? '' : `<div class="card-actions">
+          ${ex.desc ? `<button class="icon-btn ${isDescOpen?'is-active':''}" onclick="toggleWkDesc('${exId}')" title="About">${svg(ICO.info)}</button>` : ''}
           <button class="icon-btn" onclick="toggleFlagIncrease('${exId}')" title="${isFlagged ? 'Remove flag' : 'Flag for weight increase next session'}" style="${isFlagged ? 'color:var(--orange);border-color:var(--orange)' : ''}">${svg(ICO.arrowUp)}</button>
           <button class="icon-btn swap"   onclick="openBankModal('${exId}','${day}')"  title="Swap">${svg(ICO.swap)}</button>
           <button class="icon-btn danger" onclick="removeFromWorkout('${exId}')" title="Remove">${svg(ICO.close)}</button>
         </div>`}
       </div>
+      ${descHTML}
       ${prevHTML}${suggestHTML}
       <div class="wk-card-body">${isDone ? '' : cardBodyHTML(sessionSets, exId, day)}</div>
     </div>`;
@@ -2909,7 +2936,7 @@ function showToast(msg, type='success') {
   }, { passive: true });
   document.addEventListener('touchend', e => {
     if (_scrolled) {
-      const btn = e.target.closest('.add-set-btn');
+      const btn = e.target.closest('.add-set-btn, .sets-counter-btn, .remove-set-btn');
       if (btn) { e.preventDefault(); e.stopImmediatePropagation(); }
     }
     _ty = null;
