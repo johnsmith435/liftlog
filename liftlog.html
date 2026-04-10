@@ -2132,24 +2132,23 @@ function renderWorkoutCards() {
   const last = getLastSession(day);
   const cards = S.split[day].map(id => workoutCardHTML(id, day, last)).join('');
   const scroll = document.getElementById('wk-scroll');
-  scroll.innerHTML = timerCardHTML() + (cards || '<div class="empty-state">No exercises — tap + Add</div>');
+  // Timer card and exercise list are in separate containers so Sortable
+  // never touches the timer card and needs no index adjustment.
+  scroll.innerHTML = `<div id="wk-timer-wrap">${timerCardHTML()}</div><div id="wk-exercises">${cards || '<div class="empty-state">No exercises — tap + Add</div>'}</div>`;
   initWorkoutSortable();
 }
 
+let _wkSortable = null;
 function initWorkoutSortable() {
-  const el = document.getElementById('wk-scroll');
+  if (_wkSortable) { try { _wkSortable.destroy(); } catch(e) {} _wkSortable = null; }
+  const el = document.getElementById('wk-exercises');
   if (!el) return;
-  Sortable.create(el, {
+  _wkSortable = Sortable.create(el, {
     animation: 140, handle: '.drag-handle', ghostClass: 'sortable-ghost',
-    filter: '#wk-timer-card',
     onEnd(evt) {
-      // Adjust for the timer card at index 0
       const arr = S.split[WK.day];
-      const from = evt.oldIndex - 1;
-      const to   = evt.newIndex - 1;
-      if (from < 0 || to < 0 || from === to) return;
-      const [moved] = arr.splice(from, 1);
-      arr.splice(to, 0, moved);
+      const [moved] = arr.splice(evt.oldIndex, 1);
+      arr.splice(evt.newIndex, 0, moved);
       save();
     }
   });
@@ -2922,10 +2921,14 @@ function showToast(msg, type='success') {
   _tt = setTimeout(() => el.classList.remove('show'), 3000);
 }
 
-// ── Scroll-tap guard — prevents buttons firing during a scroll gesture ──────
-// If finger moves more than SCROLL_THRESHOLD px vertically, suppress the tap.
+// ── Scroll-tap guard + iOS fixed-overlay touch fix ──────────────────────────
+// iOS Safari doesn't reliably fire click events on buttons inside overflow:auto
+// containers that are themselves inside position:fixed overlays. We use a
+// touchend delegate to fire btn.click() immediately, scoped to #wk-scroll.
+// The same handler suppresses buttons during scroll gestures.
 ;(function() {
   const SCROLL_THRESHOLD = 6;
+  const BTN_SEL = '.add-set-btn, .sets-counter-btn, .remove-set-btn';
   let _ty = null, _scrolled = false;
   document.addEventListener('touchstart', e => {
     _ty = e.touches[0].clientY;
@@ -2935,9 +2938,18 @@ function showToast(msg, type='success') {
     if (_ty !== null && Math.abs(e.touches[0].clientY - _ty) > SCROLL_THRESHOLD) _scrolled = true;
   }, { passive: true });
   document.addEventListener('touchend', e => {
-    if (_scrolled) {
-      const btn = e.target.closest('.add-set-btn, .sets-counter-btn, .remove-set-btn');
-      if (btn) { e.preventDefault(); e.stopImmediatePropagation(); }
+    const btn = e.target.closest(BTN_SEL);
+    if (btn) {
+      if (_scrolled) {
+        // Suppress: finger moved too far, treat as scroll not tap
+        e.preventDefault();
+        e.stopImmediatePropagation();
+      } else if (btn.closest('#wk-scroll')) {
+        // Inside workout overlay: fire immediately via btn.click() to work
+        // around iOS not dispatching click in fixed+overflow containers
+        e.preventDefault(); // block the ghost click that would double-fire
+        btn.click();
+      }
     }
     _ty = null;
   }, { capture: true });
