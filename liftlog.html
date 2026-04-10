@@ -257,7 +257,6 @@
     .workout-timer { font-size: 22px; font-weight: 700; font-family: 'SF Mono','Fira Code',ui-monospace,monospace; color: var(--primary); letter-spacing: 1px; }
     .workout-title { font-size: 15px; font-weight: 600; flex: 1; text-align: center; }
     .workout-scroll { flex: 1; overflow-y: auto; padding: 16px 16px 120px; }
-    .wk-reorder-btn { background: transparent; border: none; color: var(--muted); padding: 4px 6px; font-size: 16px; line-height: 1; cursor: pointer; }
     .workout-footer { position: absolute; bottom: 0; left: 0; right: 0; padding: 12px 16px; padding-bottom: max(12px, env(safe-area-inset-bottom)); background: var(--bg); border-top: 1px solid var(--border); display: flex; gap: 8px; }
 
     /* Workout exercise card */
@@ -2133,24 +2132,36 @@ function renderWorkoutCards() {
   const last = getLastSession(day);
   const cards = S.split[day].map(id => workoutCardHTML(id, day, last)).join('');
   const scroll = document.getElementById('wk-scroll');
-  scroll.innerHTML = timerCardHTML() + (cards || '<div class="empty-state">No exercises — tap + Add</div>');
+  scroll.innerHTML = `<div id="wk-timer-wrap">${timerCardHTML()}</div><div id="wk-exercises">${cards || '<div class="empty-state">No exercises — tap + Add</div>'}</div>`;
   attachWkTouchDelegate(scroll);
+  initWorkoutSortable();
 }
 
-function reorderWkExercise(exId, dir) {
-  const arr = S.split[WK.day];
-  const i = arr.indexOf(exId);
-  const j = i + dir;
-  if (j < 0 || j >= arr.length) return;
-  [arr[i], arr[j]] = [arr[j], arr[i]];
-  save();
-  renderWorkoutCards();
+let _wkSortable = null;
+function initWorkoutSortable() {
+  if (_wkSortable) { try { _wkSortable.destroy(); } catch(e) {} _wkSortable = null; }
+  const el = document.getElementById('wk-exercises');
+  if (!el) return;
+  _wkSortable = Sortable.create(el, {
+    animation: 140,
+    handle: '.drag-handle',
+    ghostClass: 'sortable-ghost',
+    delay: 200,
+    delayOnTouchOnly: true,
+    onEnd(evt) {
+      const arr = S.split[WK.day];
+      const [moved] = arr.splice(evt.oldIndex, 1);
+      arr.splice(evt.newIndex, 0, moved);
+      save();
+    }
+  });
 }
 
 // Scoped touchend delegate for #wk-scroll.
-// iOS Safari doesn't fire click reliably on buttons inside overflow:auto
-// within position:fixed. Track actual scroll events on the container
-// to distinguish taps from scrolls, then fire btn.click() on touchend.
+// iOS Safari doesn't reliably fire click on buttons inside overflow:auto
+// within position:fixed. We invoke btn.onclick directly (not btn.click())
+// so there's no synthetic click event — prevents the double-fire that
+// btn.click() causes when iOS also dispatches the ghost click.
 function attachWkTouchDelegate(scroll) {
   let _didScroll = false;
   scroll.addEventListener('scroll', () => { _didScroll = true; }, { passive: true });
@@ -2158,9 +2169,11 @@ function attachWkTouchDelegate(scroll) {
   scroll.addEventListener('touchend', function(e) {
     if (_didScroll) return;
     const btn = e.target.closest('button');
-    if (!btn || btn.disabled) return;
-    e.preventDefault(); // suppress ghost click
-    btn.click();
+    if (!btn || btn.disabled || btn.closest('.drag-handle')) return;
+    if (typeof btn.onclick === 'function') {
+      e.preventDefault(); // suppress the ghost click so onclick doesn't fire twice
+      btn.onclick.call(btn, e);
+    }
   }, { passive: false });
 }
 
@@ -2230,15 +2243,10 @@ function workoutCardHTML(exId, day, lastSession) {
     ? `<div class="card-desc ${isDescOpen?'open':''}" id="desc-${exId}-wk">${ex.desc}${ex.caliUrl ? `<br><a class="desc-src" href="${ex.caliUrl}" target="_blank" rel="noopener" onclick="event.stopPropagation()">View on Calistree ↗</a>` : ''}</div>`
     : '';
 
-  const idx = S.split[day].indexOf(exId);
-  const total = S.split[day].length;
   return `
     <div class="wk-card ${isDone?'done':''}" data-id="${exId}">
       <div class="wk-card-header">
-        <div style="display:flex;flex-direction:column;gap:0;margin-right:2px">
-          <button class="wk-reorder-btn" onclick="reorderWkExercise('${exId}',-1)" ${idx===0?'style="opacity:0.2;pointer-events:none"':''} title="Move up">▲</button>
-          <button class="wk-reorder-btn" onclick="reorderWkExercise('${exId}',1)" ${idx===total-1?'style="opacity:0.2;pointer-events:none"':''} title="Move down">▼</button>
-        </div>
+        <div class="drag-handle">${svg(ICO.drag,14)}</div>
         <button class="wk-done-btn ${isDone?'checked':''}" onclick="toggleWkDone('${exId}')" title="Mark complete">
           ${isDone ? svg(ICO.check, 11) : ''}
         </button>
