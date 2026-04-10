@@ -824,10 +824,10 @@ function dayHTML(day) {
         <div class="day-title" style="color:var(--${COLOR[day]})">${LABEL[day]}</div>
         <div class="day-subtitle">${last ? 'Last logged: '+formatDateShort(last.date) : 'No previous sessions'}</div>
       </div>
-      <button class="btn btn-ghost" onclick="openBankModal(null,'${day}')">${svg(ICO.plus)} Add</button>
-    </div>
-    <div class="workout-actions" style="margin-top:0;margin-bottom:8px">
-      <button class="btn btn-ghost" style="flex:1;justify-content:center" onclick="openReorder('${day}')">Reorder</button>
+      <div style="display:flex;gap:6px">
+        <button class="btn btn-ghost" onclick="openReorder('${day}')">Reorder</button>
+        <button class="btn btn-ghost" onclick="openBankModal(null,'${day}')">${svg(ICO.plus)} Add</button>
+      </div>
     </div>
     <div class="workout-actions" style="margin-top:0;margin-bottom:16px">
       <button class="btn btn-primary" onclick="startWorkout('${day}')" style="flex:1">${svg(ICO.check)} Start Workout</button>
