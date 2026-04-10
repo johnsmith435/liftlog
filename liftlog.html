@@ -2189,6 +2189,18 @@ function closeReorder() {
 // within position:fixed. We invoke btn.onclick directly (not btn.click())
 // so there's no synthetic click event — prevents the double-fire that
 // btn.click() causes when iOS also dispatches the ghost click.
+// Used by session edit bodies (plain divs, not fixed+overflow — native click works fine)
+function attachCardBodyTouchHandler(container) {
+  container._cardTouchHandler && container.removeEventListener('touchend', container._cardTouchHandler);
+  container._cardTouchHandler = function(e) {
+    const btn = e.target.closest('.add-set-btn, .remove-set-btn, .sets-counter-btn');
+    if (!btn) return;
+    e.preventDefault();
+    btn.onclick && btn.onclick.call(btn, e);
+  };
+  container.addEventListener('touchend', container._cardTouchHandler, { passive: false });
+}
+
 function attachWkTouchDelegate(scroll) {
   let _didScroll = false;
   scroll.addEventListener('scroll', () => { _didScroll = true; }, { passive: true });
