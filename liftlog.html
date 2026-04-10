@@ -1116,7 +1116,8 @@ function changeSetCount(exId, day, delta) {
     sets.pop();
   }
   save();
-  const el = document.getElementById(`sets-count-${exId}-${day}`);
+  const scope = WK.day ? document.getElementById('wk-scroll') : document;
+  const el = scope.querySelector(`#sets-count-${exId}-${day}, [id="sets-count-${exId}-${day}"]`);
   if (el) el.textContent = next;
 }
 
