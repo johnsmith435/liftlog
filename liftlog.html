@@ -400,7 +400,7 @@
       Hide
     </button>
     <div class="workout-title" id="wk-title"></div>
-    <div style="width:72px"></div>
+    <button class="btn btn-ghost" style="padding:6px 14px;font-size:12px" onclick="openWkReorder()">Reorder</button>
   </div>
   <div class="workout-scroll" id="wk-scroll"></div>
   <div class="workout-footer">
@@ -418,6 +418,17 @@
       <div style="font-size:13px;font-family:monospace;color:rgba(255,255,255,0.85)" id="wk-banner-timer"></div>
     </div>
     <div style="font-size:12px;color:rgba(255,255,255,0.8);font-weight:600">Tap to return ↑</div>
+  </div>
+</div>
+
+<!-- Workout Reorder Sheet -->
+<div id="wk-reorder-overlay" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.6);z-index:500;align-items:flex-end;justify-content:center">
+  <div style="background:var(--card);border-radius:var(--r) var(--r) 0 0;width:100%;max-width:620px;padding:16px 16px max(20px,env(safe-area-inset-bottom))">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px">
+      <div style="font-size:15px;font-weight:700">Reorder Exercises</div>
+      <button class="btn btn-ghost" style="padding:5px 14px;font-size:13px" onclick="closeWkReorder()">Done</button>
+    </div>
+    <div id="wk-reorder-list"></div>
   </div>
 </div>
 
@@ -2136,32 +2147,39 @@ function renderWorkoutCards() {
   const last = getLastSession(day);
   const cards = S.split[day].map(id => workoutCardHTML(id, day, last)).join('');
   const scroll = document.getElementById('wk-scroll');
-  scroll.innerHTML = `<div id="wk-timer-wrap">${timerCardHTML()}</div><div id="wk-exercises">${cards || '<div class="empty-state">No exercises — tap + Add</div>'}</div>`;
+  scroll.innerHTML = timerCardHTML() + (cards || '<div class="empty-state">No exercises — tap + Add</div>');
   attachWkTouchDelegate(scroll);
-  initWorkoutSortable();
 }
 
 let _wkSortable = null;
-function initWorkoutSortable() {
+function openWkReorder() {
+  const overlay = document.getElementById('wk-reorder-overlay');
+  const list = document.getElementById('wk-reorder-list');
+  const day = WK.day;
+  list.innerHTML = S.split[day].map(id => {
+    const ex = S.bank[id];
+    return `<div class="wk-card" data-id="${id}" style="margin-bottom:8px;display:flex;align-items:center;gap:10px;padding:12px 14px;cursor:default">
+      <div class="drag-handle" style="flex-shrink:0">${svg(ICO.drag,14)}</div>
+      <div style="font-size:14px;font-weight:600;flex:1">${ex?.name||id}</div>
+    </div>`;
+  }).join('');
+  overlay.style.display = 'flex';
   if (_wkSortable) { try { _wkSortable.destroy(); } catch(e) {} _wkSortable = null; }
-  const el = document.getElementById('wk-exercises');
-  if (!el) return;
-  _wkSortable = Sortable.create(el, {
-    animation: 140,
-    handle: '.drag-handle',
-    ghostClass: 'sortable-ghost',
-    delay: 200,
-    delayOnTouchOnly: true,
-    forceFallback: true,
-    fallbackOnBody: true,
-    fallbackTolerance: 5,
+  _wkSortable = Sortable.create(list, {
+    animation: 140, handle: '.drag-handle', ghostClass: 'sortable-ghost',
     onEnd(evt) {
-      const arr = S.split[WK.day];
+      const arr = S.split[day];
       const [moved] = arr.splice(evt.oldIndex, 1);
       arr.splice(evt.newIndex, 0, moved);
       save();
     }
   });
+}
+
+function closeWkReorder() {
+  document.getElementById('wk-reorder-overlay').style.display = 'none';
+  if (_wkSortable) { try { _wkSortable.destroy(); } catch(e) {} _wkSortable = null; }
+  renderWorkoutCards();
 }
 
 // Scoped touchend delegate for #wk-scroll.
@@ -2253,7 +2271,6 @@ function workoutCardHTML(exId, day, lastSession) {
   return `
     <div class="wk-card ${isDone?'done':''}" data-id="${exId}">
       <div class="wk-card-header">
-        <div class="drag-handle">${svg(ICO.drag,14)}</div>
         <button class="wk-done-btn ${isDone?'checked':''}" onclick="toggleWkDone('${exId}')" title="Mark complete">
           ${isDone ? svg(ICO.check, 11) : ''}
         </button>
