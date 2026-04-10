@@ -256,8 +256,8 @@
     html.pwa .workout-overlay-header { padding-top: max(20px, env(safe-area-inset-top)); }
     .workout-timer { font-size: 22px; font-weight: 700; font-family: 'SF Mono','Fira Code',ui-monospace,monospace; color: var(--primary); letter-spacing: 1px; }
     .workout-title { font-size: 15px; font-weight: 600; flex: 1; text-align: center; }
-    .workout-scroll { flex: 1; overflow-y: auto; padding: 16px 16px 120px; cursor: pointer; }
-    .workout-scroll button, .workout-scroll input { cursor: auto; }
+    .workout-scroll { flex: 1; overflow-y: auto; padding: 16px 16px 120px; }
+    .wk-reorder-btn { background: transparent; border: none; color: var(--muted); padding: 4px 6px; font-size: 16px; line-height: 1; cursor: pointer; }
     .workout-footer { position: absolute; bottom: 0; left: 0; right: 0; padding: 12px 16px; padding-bottom: max(12px, env(safe-area-inset-bottom)); background: var(--bg); border-top: 1px solid var(--border); display: flex; gap: 8px; }
 
     /* Workout exercise card */
@@ -2133,31 +2133,35 @@ function renderWorkoutCards() {
   const last = getLastSession(day);
   const cards = S.split[day].map(id => workoutCardHTML(id, day, last)).join('');
   const scroll = document.getElementById('wk-scroll');
-  // Timer card and exercise list are in separate containers so Sortable
-  // never touches the timer card and needs no index adjustment.
-  scroll.innerHTML = `<div id="wk-timer-wrap">${timerCardHTML()}</div><div id="wk-exercises">${cards || '<div class="empty-state">No exercises — tap + Add</div>'}</div>`;
-  initWorkoutSortable();
+  scroll.innerHTML = timerCardHTML() + (cards || '<div class="empty-state">No exercises — tap + Add</div>');
+  attachWkTouchDelegate(scroll);
 }
 
-let _wkSortable = null;
-function initWorkoutSortable() {
-  if (_wkSortable) { try { _wkSortable.destroy(); } catch(e) {} _wkSortable = null; }
-  const el = document.getElementById('wk-exercises');
-  if (!el) return;
-  _wkSortable = Sortable.create(el, {
-    animation: 140,
-    handle: '.drag-handle',
-    ghostClass: 'sortable-ghost',
-    delay: 150,
-    delayOnTouchOnly: true,
-    touchStartThreshold: 4,
-    onEnd(evt) {
-      const arr = S.split[WK.day];
-      const [moved] = arr.splice(evt.oldIndex, 1);
-      arr.splice(evt.newIndex, 0, moved);
-      save();
-    }
-  });
+function reorderWkExercise(exId, dir) {
+  const arr = S.split[WK.day];
+  const i = arr.indexOf(exId);
+  const j = i + dir;
+  if (j < 0 || j >= arr.length) return;
+  [arr[i], arr[j]] = [arr[j], arr[i]];
+  save();
+  renderWorkoutCards();
+}
+
+// Scoped touchend delegate for #wk-scroll.
+// iOS Safari doesn't fire click reliably on buttons inside overflow:auto
+// within position:fixed. Track actual scroll events on the container
+// to distinguish taps from scrolls, then fire btn.click() on touchend.
+function attachWkTouchDelegate(scroll) {
+  let _didScroll = false;
+  scroll.addEventListener('scroll', () => { _didScroll = true; }, { passive: true });
+  scroll.addEventListener('touchstart', () => { _didScroll = false; }, { passive: true });
+  scroll.addEventListener('touchend', function(e) {
+    if (_didScroll) return;
+    const btn = e.target.closest('button');
+    if (!btn || btn.disabled) return;
+    e.preventDefault(); // suppress ghost click
+    btn.click();
+  }, { passive: false });
 }
 
 function timerCardHTML() {
@@ -2226,10 +2230,15 @@ function workoutCardHTML(exId, day, lastSession) {
     ? `<div class="card-desc ${isDescOpen?'open':''}" id="desc-${exId}-wk">${ex.desc}${ex.caliUrl ? `<br><a class="desc-src" href="${ex.caliUrl}" target="_blank" rel="noopener" onclick="event.stopPropagation()">View on Calistree ↗</a>` : ''}</div>`
     : '';
 
+  const idx = S.split[day].indexOf(exId);
+  const total = S.split[day].length;
   return `
     <div class="wk-card ${isDone?'done':''}" data-id="${exId}">
       <div class="wk-card-header">
-        <div class="drag-handle">${svg(ICO.drag,14)}</div>
+        <div style="display:flex;flex-direction:column;gap:0;margin-right:2px">
+          <button class="wk-reorder-btn" onclick="reorderWkExercise('${exId}',-1)" ${idx===0?'style="opacity:0.2;pointer-events:none"':''} title="Move up">▲</button>
+          <button class="wk-reorder-btn" onclick="reorderWkExercise('${exId}',1)" ${idx===total-1?'style="opacity:0.2;pointer-events:none"':''} title="Move down">▼</button>
+        </div>
         <button class="wk-done-btn ${isDone?'checked':''}" onclick="toggleWkDone('${exId}')" title="Mark complete">
           ${isDone ? svg(ICO.check, 11) : ''}
         </button>
@@ -2927,11 +2936,11 @@ function showToast(msg, type='success') {
   _tt = setTimeout(() => el.classList.remove('show'), 3000);
 }
 
-// ── Scroll-tap guard ─────────────────────────────────────────────────────────
-// Suppresses set-related buttons when the finger moves >6px (scroll gesture).
+// ── Scroll-tap guard (main UI only) ──────────────────────────────────────────
+// Suppresses add-set-btn taps when the finger moves >6px (scroll gesture).
+// Workout overlay buttons are handled by attachWkTouchDelegate instead.
 ;(function() {
   const SCROLL_THRESHOLD = 6;
-  const BTN_SEL = '.add-set-btn, .sets-counter-btn, .remove-set-btn';
   let _ty = null, _scrolled = false;
   document.addEventListener('touchstart', e => {
     _ty = e.touches[0].clientY;
@@ -2941,8 +2950,8 @@ function showToast(msg, type='success') {
     if (_ty !== null && Math.abs(e.touches[0].clientY - _ty) > SCROLL_THRESHOLD) _scrolled = true;
   }, { passive: true });
   document.addEventListener('touchend', e => {
-    if (_scrolled) {
-      const btn = e.target.closest(BTN_SEL);
+    if (_scrolled && !e.target.closest('#wk-scroll')) {
+      const btn = e.target.closest('.add-set-btn');
       if (btn) { e.preventDefault(); e.stopImmediatePropagation(); }
     }
     _ty = null;
