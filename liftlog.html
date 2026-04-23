@@ -1923,6 +1923,23 @@ function dashboardHTML() {
     })()}
 
     ${hasData ? `
+    <!-- ── Weekly Volume ── -->
+    <div class="chart-card">
+      <div class="chart-header">
+        <div class="chart-title">Weekly Volume</div>
+      </div>
+      <canvas id="chart-volume" height="130"></canvas>
+    </div>
+
+    ${mostImproved ? `
+    <!-- ── Most Improved ── -->
+    <div class="chart-card">
+      <div class="chart-header">
+        <div class="chart-title">Most Improved Exercise</div>
+      </div>
+      ${mostImprovedHTML(mostImproved)}
+    </div>` : ''}
+
     <!-- ── Max Weight Over Time ── -->
     <div class="chart-card">
       <div class="chart-header">
@@ -1943,14 +1960,6 @@ function dashboardHTML() {
       <div class="hist-table-wrap" id="hist-1rm-wrap"></div>
     </div>
 
-    <!-- ── Weekly Volume ── -->
-    <div class="chart-card">
-      <div class="chart-header">
-        <div class="chart-title">Weekly Volume</div>
-      </div>
-      <canvas id="chart-volume" height="130"></canvas>
-    </div>
-
     <!-- ── Personal Records ── -->
     <div class="chart-card">
       <div class="chart-header">
@@ -1958,15 +1967,6 @@ function dashboardHTML() {
       </div>
       ${prTableHTML()}
     </div>
-
-    ${mostImproved ? `
-    <!-- ── Most Improved ── -->
-    <div class="chart-card">
-      <div class="chart-header">
-        <div class="chart-title">Most Improved Exercise</div>
-      </div>
-      ${mostImprovedHTML(mostImproved)}
-    </div>` : ''}
 
     ` : `<div class="empty-state"><div class="empty-icon">📊</div><div class="empty-text">Log workouts to see your progress here</div></div>`}`;
 }
