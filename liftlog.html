@@ -1531,6 +1531,7 @@ function renderBankGrid() {
         <option value="core">Core</option>
         <option value="full body">Full Body</option>
       </select>
+      <textarea class="bank-input" id="new-ex-desc" placeholder="Description (optional)…" rows="3" style="resize:none;font-family:inherit;line-height:1.5"></textarea>
       <button class="btn btn-primary" style="width:100%;justify-content:center" onclick="addCustomExercise()">+ Add Exercise</button>
     </div>`;
 
@@ -1720,10 +1721,12 @@ function doSwap(swapOutId) {
 function addCustomExercise() {
   const name = document.getElementById('new-ex-name').value.trim();
   const mg   = document.getElementById('new-ex-mg').value;
+  const desc = document.getElementById('new-ex-desc').value.trim();
   if (!name) { showToast('Enter a name','error'); return; }
   const id = name.toLowerCase().replace(/[^a-z0-9]+/g,'_').replace(/^_|_$/g,'')+'_'+Date.now();
-  S.bank[id] = { id, name, muscleGroup:mg };
+  S.bank[id] = { id, name, muscleGroup: mg, ...(desc ? { desc } : {}) };
   document.getElementById('new-ex-name').value = '';
+  document.getElementById('new-ex-desc').value = '';
   save(); renderBankGrid();
   showToast(`"${name}" added`,'success');
 }
