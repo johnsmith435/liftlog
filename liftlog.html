@@ -1836,6 +1836,92 @@ function dashboardHTML() {
       <div class="stats-grid">${daysSincePanels}</div>
     </div>
 
+    <!-- ── At a Glance ── -->
+    ${(() => {
+      // Longest streak
+      const allDates = [...new Set(S.history.map(h => h.date))].sort();
+      let longestStreak = 0, curRun = allDates.length ? 1 : 0;
+      for (let i = 1; i < allDates.length; i++) {
+        const prev = new Date(allDates[i-1]+'T12:00:00');
+        const curr = new Date(allDates[i]+'T12:00:00');
+        const diff = (curr - prev) / 86400000;
+        if (diff === 1) { curRun++; } else { curRun = 1; }
+        if (curRun > longestStreak) longestStreak = curRun;
+      }
+      if (allDates.length === 1) longestStreak = 1;
+
+      // Avg sessions/week
+      let avgPerWeek = 0;
+      if (S.history.length > 0) {
+        const firstDate = new Date(allDates[0]+'T12:00:00');
+        const lastDate  = new Date(today()+'T12:00:00');
+        const weeks = Math.max(1, (lastDate - firstDate) / (7 * 86400000));
+        avgPerWeek = (S.history.length / weeks).toFixed(1);
+      }
+
+      // Most trained day type
+      const dayCounts = { push: byDay('push'), pull: byDay('pull'), legs: byDay('legs'), arms: byDay('arms') };
+      const mostTrainedDay = Object.entries(dayCounts).sort((a,b) => b[1]-a[1])[0];
+      const mostTrainedLabel = mostTrainedDay ? (mostTrainedDay[0].charAt(0).toUpperCase() + mostTrainedDay[0].slice(1)) : '—';
+
+      // Avg duration (duration stored in seconds)
+      const durSessions = S.history.filter(h => h.duration && h.duration > 0);
+      const avgDur = durSessions.length > 0
+        ? Math.round(durSessions.reduce((s,h) => s + h.duration, 0) / durSessions.length / 60)
+        : null;
+
+      // Total sets
+      let totalSets = 0;
+      S.history.forEach(h => Object.values(h.exercises).forEach(sets => { totalSets += sets.length; }));
+
+      // Total volume: sum of weight per set across all history
+      let totalVolume = 0;
+      S.history.forEach(h => Object.values(h.exercises).forEach(sets => {
+        sets.forEach(s => { totalVolume += parseFloat(s.weight)||0; });
+      }));
+      const volDisplay = totalVolume >= 1000
+        ? (totalVolume/1000).toFixed(1).replace(/\.0$/,'') + 'k lb'
+        : totalVolume + ' lb';
+
+      return `<div class="section-divider" style="margin-top:0;margin-bottom:12px">
+        <div class="section-divider-line"></div>
+        <div class="section-divider-label">At a Glance</div>
+        <div class="section-divider-line"></div>
+      </div>
+      <div class="stats-grid" style="margin-bottom:20px">
+        <div class="stat-card">
+          <div class="stat-label">Longest Streak</div>
+          <div class="stat-value" style="color:var(--orange)">${longestStreak}</div>
+          <div class="stat-sub">day${longestStreak!==1?'s':''} in a row</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-label">Avg Sessions/Week</div>
+          <div class="stat-value" style="color:var(--primary)">${avgPerWeek}</div>
+          <div class="stat-sub">per week</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-label">Most Trained</div>
+          <div class="stat-value" style="color:var(--${mostTrainedDay?mostTrainedDay[0]:'primary'})">${mostTrainedLabel}</div>
+          <div class="stat-sub">day type</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-label">Avg Duration</div>
+          <div class="stat-value" style="color:var(--primary)">${avgDur !== null ? avgDur : '—'}</div>
+          <div class="stat-sub">${avgDur !== null ? 'min per session' : 'no data'}</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-label">Total Sets</div>
+          <div class="stat-value" style="color:var(--primary)">${totalSets}</div>
+          <div class="stat-sub">sets logged</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-label">Total Volume</div>
+          <div class="stat-value" style="color:var(--success)">${volDisplay}</div>
+          <div class="stat-sub">weight lifted</div>
+        </div>
+      </div>`;
+    })()}
+
     ${hasData ? `
     <!-- ── Max Weight Over Time ── -->
     <div class="chart-card">
@@ -1857,12 +1943,12 @@ function dashboardHTML() {
       <div class="hist-table-wrap" id="hist-1rm-wrap"></div>
     </div>
 
-    <!-- ── Sessions Per Week ── -->
+    <!-- ── Weekly Volume ── -->
     <div class="chart-card">
       <div class="chart-header">
-        <div class="chart-title">Sessions Per Week</div>
+        <div class="chart-title">Weekly Volume</div>
       </div>
-      <canvas id="chart-freq" height="130"></canvas>
+      <canvas id="chart-volume" height="130"></canvas>
     </div>
 
     <!-- ── Personal Records ── -->
@@ -1970,11 +2056,73 @@ const CHART_OPTS = {
   }
 };
 
+function buildVolumeChart() {
+  // Build ordered 12-week labels (Mon of each week)
+  const now = new Date();
+  const labels = [];
+  const weekStarts = [];
+  for (let i = 11; i >= 0; i--) {
+    const d = new Date(now);
+    d.setDate(now.getDate() - now.getDay() - (i * 7) + 1);
+    const lbl = d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+    labels.push(lbl);
+    weekStarts.push(lbl);
+  }
+
+  // For each session, get its week label and day type, count sets
+  const volMap = {}; // weekLabel -> { push, pull, legs, arms }
+  weekStarts.forEach(lbl => { volMap[lbl] = { push: 0, pull: 0, legs: 0, arms: 0 }; });
+
+  S.history.forEach(h => {
+    const lbl = getWeekLabel(h.date);
+    if (!volMap[lbl]) return; // outside 12-week window
+    const dayType = h.day;
+    if (!['push','pull','legs','arms'].includes(dayType)) return;
+    let sets = 0;
+    Object.values(h.exercises).forEach(arr => { sets += arr.length; });
+    volMap[lbl][dayType] = (volMap[lbl][dayType] || 0) + sets;
+  });
+
+  const DAY_COLORS = { push: '#818cf8', pull: '#34d399', legs: '#fbbf24', arms: '#fb7185' };
+  const DAY_LABELS = { push: 'Push', pull: 'Pull', legs: 'Legs', arms: 'Arms' };
+
+  const datasets = ['push','pull','legs','arms'].map(dayType => ({
+    label: DAY_LABELS[dayType],
+    data: labels.map(lbl => volMap[lbl]?.[dayType] || 0),
+    backgroundColor: DAY_COLORS[dayType],
+    borderWidth: 0,
+    borderRadius: 3,
+    stack: 'vol'
+  }));
+
+  if (charts.volume) charts.volume.destroy();
+  charts.volume = new Chart(document.getElementById('chart-volume').getContext('2d'), {
+    type: 'bar',
+    data: { labels, datasets },
+    options: {
+      ...CHART_OPTS,
+      plugins: {
+        ...CHART_OPTS.plugins,
+        legend: { display: true, position: 'bottom', labels: { color: '#9ca3af', boxWidth: 12, font: { size: 11 } } },
+        tooltip: {
+          ...CHART_OPTS.plugins.tooltip,
+          callbacks: { label: ctx => ' ' + ctx.dataset.label + ': ' + ctx.parsed.y + ' set' + (ctx.parsed.y !== 1 ? 's' : '') }
+        }
+      },
+      scales: {
+        ...CHART_OPTS.scales,
+        x: { ...CHART_OPTS.scales.x, stacked: true },
+        y: { ...CHART_OPTS.scales.y, stacked: true, ticks: { ...CHART_OPTS.scales.y.ticks, stepSize: 1 } }
+      }
+    }
+  });
+}
+
 function initCharts() {
   if (document.getElementById('chart-weight')) {
     updateWeightChart();
     update1RMChart();
-    buildFreqChart();
+    buildVolumeChart();
   }
 }
 
