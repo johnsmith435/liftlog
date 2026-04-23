@@ -2202,18 +2202,28 @@ function attachCardBodyTouchHandler(container) {
 }
 
 function attachWkTouchDelegate(scroll) {
+  // Remove previous listeners before adding new ones — renderWorkoutCards()
+  // is called multiple times and #wk-scroll is a persistent element, so
+  // without cleanup every button would fire once per accumulated listener.
+  if (scroll._wkScrollHandler)  { scroll.removeEventListener('scroll',     scroll._wkScrollHandler); }
+  if (scroll._wkStartHandler)   { scroll.removeEventListener('touchstart', scroll._wkStartHandler); }
+  if (scroll._wkEndHandler)     { scroll.removeEventListener('touchend',   scroll._wkEndHandler, { capture: false }); }
+
   let _didScroll = false;
-  scroll.addEventListener('scroll', () => { _didScroll = true; }, { passive: true });
-  scroll.addEventListener('touchstart', () => { _didScroll = false; }, { passive: true });
-  scroll.addEventListener('touchend', function(e) {
+  scroll._wkScrollHandler = () => { _didScroll = true; };
+  scroll._wkStartHandler  = () => { _didScroll = false; };
+  scroll._wkEndHandler    = function(e) {
     if (_didScroll) return;
     const btn = e.target.closest('button');
-    if (!btn || btn.disabled || btn.closest('.drag-handle')) return;
+    if (!btn || btn.disabled) return;
     if (typeof btn.onclick === 'function') {
-      e.preventDefault(); // suppress the ghost click so onclick doesn't fire twice
+      e.preventDefault();
       btn.onclick.call(btn, e);
     }
-  }, { passive: false });
+  };
+  scroll.addEventListener('scroll',     scroll._wkScrollHandler, { passive: true });
+  scroll.addEventListener('touchstart', scroll._wkStartHandler,  { passive: true });
+  scroll.addEventListener('touchend',   scroll._wkEndHandler,    { passive: false });
 }
 
 function timerCardHTML() {
