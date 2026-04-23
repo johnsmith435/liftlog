@@ -422,8 +422,8 @@
 </div>
 
 <!-- Workout Reorder Sheet -->
-<div id="wk-reorder-overlay" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.6);z-index:500;align-items:flex-end;justify-content:center;touch-action:none" ontouchmove="event.preventDefault()" onclick="if(event.target===this)closeReorder()">
-  <div style="background:var(--card);border-radius:var(--r) var(--r) 0 0;width:100%;max-width:620px;padding:16px 16px max(20px,env(safe-area-inset-bottom))" ontouchmove="event.stopPropagation()">
+<div id="wk-reorder-overlay" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.6);z-index:500;align-items:flex-end;justify-content:center" onclick="if(event.target===this)closeReorder()">
+  <div style="background:var(--card);border-radius:var(--r) var(--r) 0 0;width:100%;max-width:620px;padding:16px 16px max(20px,env(safe-area-inset-bottom))">
     <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px">
       <div style="font-size:15px;font-weight:700">Reorder Exercises</div>
       <button class="btn btn-ghost" style="padding:5px 14px;font-size:13px" onclick="closeReorder()">Done</button>
@@ -2156,6 +2156,7 @@ let _wkSortable = null;
 let _reorderDay = null;
 function openReorder(day) {
   _reorderDay = day;
+  document.body.style.overflow = 'hidden';
   const overlay = document.getElementById('wk-reorder-overlay');
   const list = document.getElementById('wk-reorder-list');
   list.innerHTML = S.split[day].map(id => {
@@ -2179,6 +2180,7 @@ function openReorder(day) {
 }
 
 function closeReorder() {
+  document.body.style.overflow = '';
   document.getElementById('wk-reorder-overlay').style.display = 'none';
   if (_wkSortable) { try { _wkSortable.destroy(); } catch(e) {} _wkSortable = null; }
   if (WK.day) renderWorkoutCards(); else render();
