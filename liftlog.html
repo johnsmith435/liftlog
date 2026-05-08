@@ -864,8 +864,9 @@ function cardHTML(exId, day, lastSession) {
   const prevSets = lastSession?.exercises?.[exId] || [];
   let prevHTML = '';
   if (prevSets.length) {
-    const prevW = prevSets[0]?.weight ?? '';
-    const prevR = prevSets[0]?.reps ?? '';
+    const prevLast = prevSets[prevSets.length - 1];
+    const prevW = prevLast?.weight ?? '';
+    const prevR = prevLast?.reps ?? '';
     const prevN = prevSets.length;
     prevHTML = `
       <div class="card-prev">
@@ -2439,7 +2440,7 @@ function workoutCardHTML(exId, day, lastSession) {
 
   const prevSets = lastSession?.exercises?.[exId] || [];
   const prevHTML = prevSets.length
-    ? `<div class="wk-prev">Last: ${prevSets.length} × ${prevSets[0]?.weight}lb × ${prevSets[0]?.reps} reps · ${formatDateShort(lastSession.date)}</div>`
+    ? `<div class="wk-prev">Last: ${prevSets.length} × ${prevSets[prevSets.length-1]?.weight}lb × ${prevSets[prevSets.length-1]?.reps} reps · ${formatDateShort(lastSession.date)}</div>`
     : '';
 
   const suggestW = shouldSuggestWeightUp(exId);
