@@ -723,6 +723,18 @@ function isFirstPR(exId, sessionId, w) {
   return false;
 }
 function getDefaultEntry(exId, day) {
+  // Use last logged weight/reps for this exercise across any day
+  const hist = getExerciseHistory(exId);
+  if (hist.length) {
+    const lastSets = hist[hist.length - 1].exercises[exId];
+    const n = lastSets.length || 3;
+    const w = lastSets[0]?.weight ?? '';
+    const r = lastSets[0]?.reps ?? '';
+    return Array.from({ length: n }, (_, i) => ({
+      weight: lastSets[i]?.weight ?? w,
+      reps:   lastSets[i]?.reps   ?? r,
+    }));
+  }
   const d = DEFAULT_ENTRY[day]?.[exId];
   const w = d?.weight ?? '', r = d?.reps ?? '', n = d?.sets ?? 3;
   return Array.from({ length: n }, () => ({ weight: w, reps: r }));
