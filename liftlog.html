@@ -879,7 +879,7 @@ function cardHTML(exId, day, lastSession) {
   const isFlaggedHome = !!S.flaggedForIncrease?.[exId];
   const suggestWHome = shouldSuggestWeightUp(exId);
   const homeSuggestHTML = suggestWHome
-    ? `<div class="wk-suggest">${svg(ICO.arrowUp,11)} ${isFlaggedHome ? 'Flagged for weight increase next session' : `Consider moving up from ${suggestWHome}lb — you've hit 3 sessions at ≥8 reps`}</div>`
+    ? `<div class="wk-suggest">${svg(ICO.arrowUp,11)} ${isFlaggedHome ? 'Flagged for weight increase next session' : `Consider moving up from ${suggestWHome}lb — you've hit 5 sessions at ≥8 reps`}</div>`
     : '';
 
   return `
@@ -2408,8 +2408,8 @@ function shouldSuggestWeightUp(exId, excludeId) {
     const lastW = hist.length ? parseFloat(hist[hist.length-1].exercises[exId]?.[0]?.weight)||0 : 0;
     if (lastW > 0) return lastW;
   }
-  if (hist.length < 3) return null;
-  const recent = hist.slice(-3);
+  if (hist.length < 5) return null;
+  const recent = hist.slice(-5);
   const weights = recent.map(s => parseFloat(s.exercises[exId]?.[0]?.weight)||0);
   const reps    = recent.map(s => parseInt(s.exercises[exId]?.[0]?.reps)||0);
   const allSame = weights.every(w => w === weights[0]) && weights[0] > 0;
@@ -2433,7 +2433,7 @@ function workoutCardHTML(exId, day, lastSession) {
   const suggestW = shouldSuggestWeightUp(exId);
   const isFlagged = !!S.flaggedForIncrease?.[exId];
   const suggestHTML = suggestW && !isDone
-    ? `<div class="wk-suggest">${svg(ICO.arrowUp,11)} ${isFlagged ? 'Flagged for weight increase next session' : `Consider moving up from ${suggestW}lb — you've hit 3 sessions at ≥8 reps`}</div>`
+    ? `<div class="wk-suggest">${svg(ICO.arrowUp,11)} ${isFlagged ? 'Flagged for weight increase next session' : `Consider moving up from ${suggestW}lb — you've hit 5 sessions at ≥8 reps`}</div>`
     : '';
 
   const caliLink = ex.caliUrl
